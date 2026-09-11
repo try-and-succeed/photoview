@@ -128,7 +128,13 @@ $ npm run genSchemaTypes   # regenerate GraphQL TS types; reads the schema from 
 - `scanner/` — the filesystem scanning pipeline: walks album directories (`scanner_album.go`),
   processes media (`scanner_media.go`), generates thumbnails/encodes video
   (`media_encoding/executable_worker`), runs face detection (`face_detection/`), and is driven by a
-  queue (`scanner_queue/`) plus a periodic trigger (`periodic_scanner/`). `scanner_queue.
+  queue (`scanner_queue/`) plus a periodic trigger (`periodic_scanner/`). Both scan entry points
+  delete albums that have disappeared from disk, each scoped to what it actually walked:
+  `FindAlbumsForUser` → `cleanup_tasks.DeleteOldUserAlbums` covers everything in the user's
+  `user_albums` (shared-in albums included, and it deletes the album row itself, not just that
+  user's grant), while `FindAlbumsForAlbum` → `DeleteStaleSubAlbums` is limited to the rescanned
+  album's own subtree. Neither runs when discovery hit an error, since every directory the walk
+  couldn't reach would otherwise look deleted. `scanner_queue.
   GetQueueStatus`/`CancelJob` (surfaced as the `scannerQueueStatus` query / `cancelScanJob`
   mutation) introspect and cancel individual queued/running jobs; cancellation is cooperative
   (checked between files via a per-job `context.CancelFunc`, not mid-file) so an in-progress

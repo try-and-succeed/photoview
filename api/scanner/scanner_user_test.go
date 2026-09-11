@@ -96,6 +96,57 @@ func TestFindAlbumsForAlbumPreservesGrantProvenance(t *testing.T) {
 	assert.Zero(t, count, "revoking the true source must remove access even after the sub-album moved elsewhere")
 }
 
+// TestFindAlbumsForAlbumRemovesVanishedSubAlbums covers moving a directory
+// out of an album on disk: a rescan of that one album has to drop the album
+// row the directory left behind, while leaving everything outside the
+// scanned subtree - including albums belonging to someone else - alone.
+func TestFindAlbumsForAlbumRemovesVanishedSubAlbums(t *testing.T) {
+	db := test_utils.DatabaseTest(t)
+	test_utils.FilesystemTest(t)
+
+	rootPath := t.TempDir()
+	root := models.Album{Title: "root", Path: rootPath}
+	assert.NoError(t, db.Save(&root).Error)
+
+	movedPath := filepath.Join(rootPath, "moved")
+	assert.NoError(t, os.Mkdir(movedPath, 0o755))
+	writeDummyPhoto(t, movedPath, "photo.jpg")
+
+	stayingPath := filepath.Join(rootPath, "staying")
+	assert.NoError(t, os.Mkdir(stayingPath, 0o755))
+	writeDummyPhoto(t, stayingPath, "photo.jpg")
+
+	// Never part of the scanned subtree, so the rescan never looks at its
+	// directory and must not draw any conclusion about it.
+	outsider := models.Album{Title: "outsider", Path: t.TempDir()}
+	assert.NoError(t, db.Save(&outsider).Error)
+
+	_, scanErrors := scanner.FindAlbumsForAlbum(db, &root, scanner_cache.MakeAlbumCache())
+	assert.Empty(t, scanErrors)
+
+	var moved models.Album
+	assert.NoError(t, db.Where("path = ?", movedPath).First(&moved).Error)
+
+	// The move itself - all this album's directory knows is that it's gone.
+	assert.NoError(t, os.RemoveAll(movedPath))
+
+	_, scanErrors = scanner.FindAlbumsForAlbum(db, &root, scanner_cache.MakeAlbumCache())
+	assert.Empty(t, scanErrors)
+
+	var count int64
+	assert.NoError(t, db.Model(&models.Album{}).Where("id = ?", moved.ID).Count(&count).Error)
+	assert.Zero(t, count, "a sub-album whose directory is gone must not survive a rescan of its parent")
+
+	assert.NoError(t, db.Model(&models.Album{}).Where("path = ?", stayingPath).Count(&count).Error)
+	assert.Equal(t, int64(1), count, "the sub-album still on disk must be kept")
+
+	assert.NoError(t, db.Model(&models.Album{}).Where("id = ?", root.ID).Count(&count).Error)
+	assert.Equal(t, int64(1), count, "the rescanned album itself must never be deleted")
+
+	assert.NoError(t, db.Model(&models.Album{}).Where("id = ?", outsider.ID).Count(&count).Error)
+	assert.Equal(t, int64(1), count, "an album outside the scanned subtree must be left alone")
+}
+
 // TestFindAlbumsForUserPreservesGrantProvenanceOnSecondRootPath covers the
 // second grant-copying path in the scanner: an album already exists (e.g.
 // reachable through a second root path) and a particular user doesn't yet

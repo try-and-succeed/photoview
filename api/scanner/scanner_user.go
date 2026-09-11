@@ -110,11 +110,11 @@ func FindAlbumsForUser(db *gorm.DB, user *models.User, albumCache *scanner_cache
 }
 
 // FindAlbumsForAlbum recursively (re)scans a single, already-existing album and
-// its sub-directories, discovering new sub-albums without touching the rest of
-// the library. Unlike FindAlbumsForUser, this does not delete albums that no
-// longer exist on disk — that cleanup only makes sense when scanning a user's
-// entire library, since otherwise every album outside the given subtree would
-// look "missing" and be deleted.
+// its sub-directories, discovering new sub-albums and removing the ones that
+// are gone from disk, without touching the rest of the library. The cleanup is
+// scoped to this subtree - which the walk covers in full - rather than to
+// everything the owner can reach, so it never mistakes an album outside it,
+// or one shared in from another user, for a deleted one.
 func FindAlbumsForAlbum(db *gorm.DB, album *models.Album, albumCache *scanner_cache.AlbumScannerCache) ([]*models.Album, []error) {
 	if _, err := os.Stat(album.Path); err != nil {
 		if os.IsNotExist(err) {
@@ -130,7 +130,15 @@ func FindAlbumsForAlbum(db *gorm.DB, album *models.Album, albumCache *scanner_ca
 		ignore: nil,
 	})
 
-	return walkAlbumScanQueue(db, scanQueue, albumCache, nil)
+	albums, scanErrors := walkAlbumScanQueue(db, scanQueue, albumCache, nil)
+
+	// Same rule as FindAlbumsForUser: a walk that hit errors saw only part of
+	// the subtree, and everything it couldn't reach would look deleted.
+	if len(scanErrors) == 0 {
+		scanErrors = append(scanErrors, cleanup_tasks.DeleteStaleSubAlbums(db, album, albums)...)
+	}
+
+	return albums, scanErrors
 }
 
 type scanInfo struct {

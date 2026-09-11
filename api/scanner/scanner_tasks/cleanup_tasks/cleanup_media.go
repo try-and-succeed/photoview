@@ -90,6 +90,43 @@ func DeleteOldUserAlbums(db *gorm.DB, scannedAlbums []*models.Album, user *model
 		return []error{errors.Wrap(err, "get albums to be deleted from database")}
 	}
 
+	return deleteAlbumRows(db, deleteAlbums)
+}
+
+// DeleteStaleSubAlbums deletes the albums below rootAlbum that a just
+// completed scan of that album did not find on disk. Unlike
+// DeleteOldUserAlbums it is scoped to one subtree, so it can run after a
+// single-album rescan (which walks exactly that subtree) without treating
+// the rest of the library - or an album shared in from someone else - as
+// missing. rootAlbum itself is never deleted: the caller has just confirmed
+// its directory is there.
+func DeleteStaleSubAlbums(db *gorm.DB, rootAlbum *models.Album, scannedAlbums []*models.Album) []error {
+	subtree, err := rootAlbum.GetChildren(db, nil)
+	if err != nil {
+		return []error{errors.Wrap(err, "get sub-albums to check for deletion")}
+	}
+
+	scanned := make(map[int]struct{}, len(scannedAlbums)+1)
+	scanned[rootAlbum.ID] = struct{}{}
+	for _, album := range scannedAlbums {
+		scanned[album.ID] = struct{}{}
+	}
+
+	deleteAlbums := make([]models.Album, 0)
+	for _, album := range subtree {
+		if _, found := scanned[album.ID]; !found {
+			deleteAlbums = append(deleteAlbums, *album)
+		}
+	}
+
+	return deleteAlbumRows(db, deleteAlbums)
+}
+
+// deleteAlbumRows removes the given albums from the cache and the database,
+// together with the access grants pointing at them, recomputing the
+// materialized access of anyone whose grant merely referenced one of them as
+// its source.
+func deleteAlbumRows(db *gorm.DB, deleteAlbums []models.Album) []error {
 	if len(deleteAlbums) == 0 {
 		return []error{}
 	}
