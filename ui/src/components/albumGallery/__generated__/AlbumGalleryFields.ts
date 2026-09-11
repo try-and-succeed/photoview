@@ -104,6 +104,10 @@ export interface AlbumGalleryFields {
    */
   viewerCanUpload: boolean;
   /**
+   * Whether the currently logged in user may delete or move this album
+   */
+  viewerCanDelete: boolean;
+  /**
    * The albums contained in this album
    */
   subAlbums: AlbumGalleryFields_subAlbums[];

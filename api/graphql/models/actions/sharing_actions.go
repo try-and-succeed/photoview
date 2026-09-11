@@ -89,6 +89,16 @@ func GrantAlbumAccess(db *gorm.DB, actor *models.User, albumID int, targetUserID
 		}
 	}
 
+	if !actor.Admin {
+		foreign, err := targetGrantIsForeign(db, actor.ID, albumID, targetUserID)
+		if err != nil {
+			return nil, err
+		}
+		if foreign {
+			return nil, errors.New("that user's access to this folder was granted by someone else")
+		}
+	}
+
 	var targetUser models.User
 	if err := db.First(&targetUser, targetUserID).Error; err != nil {
 		return nil, errors.Wrap(err, "find target user")
@@ -122,7 +132,36 @@ func RevokeAlbumAccess(db *gorm.DB, actor *models.User, albumID int, targetUserI
 		if grant == nil || grant.GrantedByUserID != nil {
 			return errors.New("only the owner of a folder may revoke access to it")
 		}
+
+		foreign, err := targetGrantIsForeign(db, actor.ID, albumID, targetUserID)
+		if err != nil {
+			return err
+		}
+		if foreign {
+			return errors.New("that user's access to this folder was granted by someone else")
+		}
 	}
 
 	return models.RevokeAlbumLevel(db, albumID, targetUserID)
+}
+
+// targetGrantIsForeign reports whether targetUserID already holds a grant on
+// albumID, sourced at albumID itself, that actorID has no business touching:
+// one an admin configured (no grantor at all) or one another user shared.
+// Grant and revoke both write exactly that row - the upsert key is
+// (user, album, source_album) - so without this check one owner could
+// overwrite a co-owner's admin-configured grant, or revoke access they
+// never gave. Re-sharing or withdrawing the actor's own earlier share still
+// passes, since that row names them as the grantor.
+func targetGrantIsForeign(db *gorm.DB, actorID int, albumID int, targetUserID int) (bool, error) {
+	var grant models.UserAlbumGrant
+	err := db.Where("user_id = ? AND album_id = ? AND source_album_id = ?", targetUserID, albumID, albumID).First(&grant).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.Wrap(err, "get target user's existing grant on album")
+	}
+
+	return grant.GrantedByUserID == nil || *grant.GrantedByUserID != actorID, nil
 }

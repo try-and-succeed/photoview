@@ -304,10 +304,15 @@ func CopyAlbumGrants(db *gorm.DB, sourceAlbumID int, targetAlbumID int, onlyUser
 
 // RecomputeUserAlbums recalculates the materialized UserAlbums row for each
 // (userID, albumID) pair in albumIDs from the current UserAlbumGrant rows:
-// the max Level across every source, and a nil GrantedByUserID (owner
-// access) if any source is owner-rooted, else an arbitrary non-nil
-// grantor. An album with no remaining grant rows has its UserAlbums row
-// deleted, matching the "no access" semantics of a full revoke.
+// the highest-level source wins, and the row takes both its Level and its
+// GrantedByUserID from that one source. Level and provenance have to come
+// from the same grant - pairing the highest level with a nil
+// GrantedByUserID borrowed from some lower owner-rooted grant would let
+// GrantAlbumAccess read a peer-granted level as the user's own and re-share
+// it. Owner-rooted sources win ties, so a user who owns an album at the
+// level someone else shared with them keeps their own provenance. An album
+// with no remaining grant rows has its UserAlbums row deleted, matching the
+// "no access" semantics of a full revoke.
 func RecomputeUserAlbums(db *gorm.DB, userID int, albumIDs []int) error {
 	if len(albumIDs) == 0 {
 		return nil
@@ -333,17 +338,17 @@ func RecomputeUserAlbums(db *gorm.DB, userID int, albumIDs []int) error {
 		}
 
 		best := sources[0]
-		grantedBy := best.GrantedByUserID
 		for _, g := range sources[1:] {
 			if g.Level.HigherThan(best.Level) {
 				best = g
+				continue
 			}
-			if g.GrantedByUserID == nil {
-				grantedBy = nil
+			if g.GrantedByUserID == nil && best.GrantedByUserID != nil && !best.Level.HigherThan(g.Level) {
+				best = g
 			}
 		}
 
-		toUpsert = append(toUpsert, UserAlbums{UserID: userID, AlbumID: albumID, Level: best.Level, GrantedByUserID: grantedBy})
+		toUpsert = append(toUpsert, UserAlbums{UserID: userID, AlbumID: albumID, Level: best.Level, GrantedByUserID: best.GrantedByUserID})
 	}
 
 	if len(toUpsert) > 0 {

@@ -112,7 +112,10 @@ func SanitizeRelativePath(p string) (string, error) {
 	}
 
 	slashed := filepath.ToSlash(p)
-	if strings.HasPrefix(slashed, "/") {
+	// VolumeName catches what the "/" check can't: on Windows "C:\outside"
+	// and `\\host\share` survive ToSlash as volume-qualified paths that
+	// filepath.Join would resolve away from the root entirely.
+	if strings.HasPrefix(slashed, "/") || filepath.IsAbs(p) || filepath.VolumeName(p) != "" {
 		return "", fmt.Errorf("absolute paths are not allowed")
 	}
 

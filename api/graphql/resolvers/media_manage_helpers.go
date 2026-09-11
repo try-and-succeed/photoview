@@ -40,7 +40,7 @@ func deleteOneMedia(db *gorm.DB, user *models.User, mediaID int) error {
 		return err
 	}
 
-	canDelete, err := user.HasAlbumLevel(db, &album, models.AlbumPermissionLevelUpload)
+	canDelete, err := user.HasAlbumLevel(db, &album, models.AlbumPermissionLevelDelete)
 	if err != nil {
 		return err
 	}

@@ -100,14 +100,53 @@ func TestGrantAlbumAccess_OwnerOnly(t *testing.T) {
 			UserID: noShare.ID, AlbumID: album.ID, Level: models.AlbumPermissionLevelDelete, GrantedByUserID: nil,
 		}).Error)
 
-		_, err = actions.GrantAlbumAccess(db, noShare, album.ID, thirdParty.ID, models.AlbumPermissionLevelRead)
+		// A target nobody has shared this album with yet, so the only thing
+		// standing between noShare and a successful grant is CanShare.
+		freshTarget, err := models.RegisterUser(db, "fresh_target", nil, false)
+		assert.NoError(t, err)
+
+		_, err = actions.GrantAlbumAccess(db, noShare, album.ID, freshTarget.ID, models.AlbumPermissionLevelRead)
 		assert.Error(t, err)
 
 		noShare.CanShare = true
 		assert.NoError(t, db.Save(noShare).Error)
 
-		_, err = actions.GrantAlbumAccess(db, noShare, album.ID, thirdParty.ID, models.AlbumPermissionLevelRead)
+		_, err = actions.GrantAlbumAccess(db, noShare, album.ID, freshTarget.ID, models.AlbumPermissionLevelRead)
 		assert.NoError(t, err, "granting CanShare should unlock sharing without any other change")
+	})
+
+	t.Run("an owner cannot overwrite a grant another user made", func(t *testing.T) {
+		coOwner, err := models.RegisterUser(db, "co_owner", nil, false)
+		assert.NoError(t, err)
+		coOwner.CanShare = true
+		assert.NoError(t, db.Save(coOwner).Error)
+		assert.NoError(t, db.Create(&models.UserAlbums{
+			UserID: coOwner.ID, AlbumID: album.ID, Level: models.AlbumPermissionLevelDelete,
+		}).Error)
+
+		// recipient's grant on this album came from owner, in the very first
+		// subtest above.
+		_, err = actions.GrantAlbumAccess(db, coOwner, album.ID, recipient.ID, models.AlbumPermissionLevelRead)
+		assert.Error(t, err, "a co-owner must not be able to rewrite someone else's grant")
+
+		grant, err := recipient.EffectiveGrant(db, &album)
+		assert.NoError(t, err)
+		if assert.NotNil(t, grant) {
+			assert.Equal(t, models.AlbumPermissionLevelUpload, grant.Level, "the original grant must be untouched")
+		}
+
+		assert.Error(t, actions.RevokeAlbumAccess(db, coOwner, album.ID, recipient.ID),
+			"a co-owner must not be able to revoke someone else's grant")
+
+		grant, err = recipient.EffectiveGrant(db, &album)
+		assert.NoError(t, err)
+		assert.NotNil(t, grant, "the revoke must not have removed the original grant")
+	})
+
+	t.Run("an admin may still rewrite a grant another user made", func(t *testing.T) {
+		permission, err := actions.GrantAlbumAccess(db, admin, album.ID, recipient.ID, models.AlbumPermissionLevelRead)
+		assert.NoError(t, err)
+		assert.Equal(t, models.AlbumPermissionLevelRead, permission.Level)
 	})
 }
 

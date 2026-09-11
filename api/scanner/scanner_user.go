@@ -66,12 +66,19 @@ func FindAlbumsForUser(db *gorm.DB, user *models.User, albumCache *scanner_cache
 
 	scanQueue := list.New()
 
+	// A root directory that is confirmed gone is an intentional removal and
+	// its albums should still be cleaned up; anything else (an unreadable
+	// directory, an unmounted share) means we simply couldn't look, and
+	// acting on that would delete albums that are still there.
+	discoveryComplete := true
+
 	for _, album := range userRootAlbums {
 		// Check if user album directory exists on the file system
 		if _, err := os.Stat(album.Path); err != nil {
 			if os.IsNotExist(err) {
 				scanErrors = append(scanErrors, errors.Errorf("Album directory for user '%s' does not exist '%s'\n", user.Username, album.Path))
 			} else {
+				discoveryComplete = false
 				scanErrors = append(scanErrors, errors.Errorf("Could not read album directory for user '%s': %s\n", user.Username, album.Path))
 			}
 		} else {
@@ -85,9 +92,19 @@ func FindAlbumsForUser(db *gorm.DB, user *models.User, albumCache *scanner_cache
 
 	userAlbums, walkErrors := walkAlbumScanQueue(db, scanQueue, albumCache, user)
 	scanErrors = append(scanErrors, walkErrors...)
+	if len(walkErrors) > 0 {
+		discoveryComplete = false
+	}
 
-	deleteErrors := cleanup_tasks.DeleteOldUserAlbums(db, userAlbums, user)
-	scanErrors = append(scanErrors, deleteErrors...)
+	// DeleteOldUserAlbums treats every album missing from userAlbums as
+	// stale, so a partial walk would take valid albums - and the permission
+	// grants hanging off them - down with it.
+	if discoveryComplete {
+		deleteErrors := cleanup_tasks.DeleteOldUserAlbums(db, userAlbums, user)
+		scanErrors = append(scanErrors, deleteErrors...)
+	} else {
+		scanErrors = append(scanErrors, errors.Errorf("Skipped cleanup of removed albums for user '%s': album discovery was incomplete\n", user.Username))
+	}
 
 	return userAlbums, scanErrors
 }

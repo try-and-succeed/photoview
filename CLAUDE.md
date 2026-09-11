@@ -63,7 +63,7 @@ $ npm run format:check  # prettier --check
 $ npm test               # vitest, watch mode
 $ npx vitest run path/to/file.test.tsx   # single test file
 $ npm run build
-$ npm run genSchemaTypes   # regenerate GraphQL TS types from src/**/*.graphql queries; needs a running API for introspection
+$ npm run genSchemaTypes   # regenerate GraphQL TS types; reads the schema from api/graphql/resolvers/*.graphql, no running API needed
 ```
 
 - `genSchemaTypes` (Apollo codegen) must be re-run after adding/changing any `gql` query/mutation

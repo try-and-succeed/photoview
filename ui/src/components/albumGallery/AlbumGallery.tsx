@@ -29,6 +29,7 @@ export const ALBUM_GALLERY_FRAGMENT = gql`
     id
     title
     viewerCanUpload
+    viewerCanDelete
     subAlbums(
       order: { order_by: "title", order_direction: $orderDirection }
       showHidden: $showHidden
@@ -223,7 +224,7 @@ const AlbumGallery = React.forwardRef(
           />
         )}
         <AlbumTitle album={album} disableLink />
-        {album?.viewerCanUpload && mediaState.media.length > 0 && (
+        {album?.viewerCanDelete && mediaState.media.length > 0 && (
           <div className="flex items-center gap-2 mb-2">
             {selectMode ? (
               <>

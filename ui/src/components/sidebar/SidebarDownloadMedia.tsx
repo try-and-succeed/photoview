@@ -301,22 +301,30 @@ const SidebarShareMediaButton = ({
 
   const share = async () => {
     setSharing(true)
+    // Sharing a link is the fallback whenever the OS share sheet can't take
+    // the file itself (desktop browsers without file support). Decide that
+    // before downloading anything: a browser exposing share() without
+    // canShare() gives no way to know it takes files, and a large or failing
+    // download would otherwise delay a share it was never needed for.
+    const shareLink = () =>
+      navigator.share({
+        title: media.title ?? undefined,
+        url: location.href,
+      })
+
     try {
+      if (!navigator.canShare) {
+        await shareLink()
+        return
+      }
+
       const blob = await fetchMediaBlobQuiet(row.url)
 
       const filename = row.url.match(/[^/]*$/)?.[0] ?? media.title ?? 'photo'
       const file = new File([blob], filename, { type: blob.type })
 
-      // A browser exposing share() without canShare() gives no way to know
-      // it takes files, and passing some a file they can't handle rejects
-      // the whole share - treat a missing canShare as "no file support".
-      if (!navigator.canShare?.({ files: [file] })) {
-        // Fall back to sharing a link when the OS share sheet can't take
-        // this file directly (e.g. desktop browsers without file support).
-        await navigator.share({
-          title: media.title ?? undefined,
-          url: location.href,
-        })
+      if (!navigator.canShare({ files: [file] })) {
+        await shareLink()
         return
       }
 

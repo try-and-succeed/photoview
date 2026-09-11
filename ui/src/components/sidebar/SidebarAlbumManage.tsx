@@ -1,5 +1,5 @@
 import React, { useContext, useState } from 'react'
-import { gql, useMutation, useQuery } from '@apollo/client'
+import { gql, useApolloClient, useMutation, useQuery } from '@apollo/client'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { SidebarSection, SidebarSectionTitle } from './SidebarComponents'
@@ -55,6 +55,7 @@ const SidebarAlbumManage = ({
 }: SidebarAlbumManageProps) => {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const client = useApolloClient()
   const { updateSidebar } = useContext(SidebarContext)
 
   const [newName, setNewName] = useState(albumTitle)
@@ -95,6 +96,13 @@ const SidebarAlbumManage = ({
     // first would surface a harmless but confusing "album not found" error
     // toast before that navigation completes.
     onCompleted: () => {
+      // The album lists and the tree are cache-first, so without this the
+      // deleted album keeps showing up in them after the navigation below.
+      client.cache.evict({
+        id: client.cache.identify({ __typename: 'Album', id: albumId }),
+      })
+      client.cache.evict({ fieldName: 'myAlbums' })
+      client.cache.gc()
       updateSidebar(null)
       navigate('/albums')
     },

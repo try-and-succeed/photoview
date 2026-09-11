@@ -12,10 +12,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// setupMediaManageTest creates an album on a real temp directory, an
-// uploader (Upload-level), a read-only user (Read-level) and an admin (no
-// explicit grant needed), all sharing that one album.
-func setupMediaManageTest(t *testing.T) (r *mutationResolver, album *models.Album, uploader *models.User, readOnly *models.User, admin *models.User) {
+// setupMediaManageTest creates an album on a real temp directory, a deleter
+// (Delete-level), an uploader (Upload-level), a read-only user (Read-level)
+// and an admin (no explicit grant needed), all sharing that one album.
+func setupMediaManageTest(t *testing.T) (r *mutationResolver, album *models.Album, deleter *models.User, uploader *models.User, readOnly *models.User, admin *models.User) {
 	t.Helper()
 
 	test_utils.FilesystemTest(t)
@@ -26,6 +26,8 @@ func setupMediaManageTest(t *testing.T) (r *mutationResolver, album *models.Albu
 	assert.NoError(t, db.Save(album).Error)
 
 	var err error
+	deleter, err = models.RegisterUser(db, "media_deleter", nil, false)
+	assert.NoError(t, err)
 	uploader, err = models.RegisterUser(db, "media_uploader", nil, false)
 	assert.NoError(t, err)
 	readOnly, err = models.RegisterUser(db, "media_read_only", nil, false)
@@ -33,6 +35,9 @@ func setupMediaManageTest(t *testing.T) (r *mutationResolver, album *models.Albu
 	admin, err = models.RegisterUser(db, "media_admin", nil, true)
 	assert.NoError(t, err)
 
+	assert.NoError(t, db.Create(&models.UserAlbums{
+		UserID: deleter.ID, AlbumID: album.ID, Level: models.AlbumPermissionLevelDelete,
+	}).Error)
 	assert.NoError(t, db.Create(&models.UserAlbums{
 		UserID: uploader.ID, AlbumID: album.ID, Level: models.AlbumPermissionLevelUpload,
 	}).Error)
@@ -42,7 +47,7 @@ func setupMediaManageTest(t *testing.T) (r *mutationResolver, album *models.Albu
 
 	r = &mutationResolver{Resolver: &Resolver{database: db}}
 
-	return r, album, uploader, readOnly, admin
+	return r, album, deleter, uploader, readOnly, admin
 }
 
 func makeTestMediaFile(t *testing.T, r *mutationResolver, album *models.Album, fileName string) *models.Media {
@@ -58,7 +63,7 @@ func makeTestMediaFile(t *testing.T, r *mutationResolver, album *models.Album, f
 }
 
 func TestRenameMedia(t *testing.T) {
-	r, album, uploader, readOnly, admin := setupMediaManageTest(t)
+	r, album, _, uploader, readOnly, admin := setupMediaManageTest(t)
 	ctx := auth.AddUserToContext(context.Background(), uploader)
 
 	t.Run("happy path renames the file and updates the row", func(t *testing.T) {
@@ -172,8 +177,8 @@ func TestRenameMedia(t *testing.T) {
 }
 
 func TestDeleteMedia(t *testing.T) {
-	r, album, uploader, readOnly, _ := setupMediaManageTest(t)
-	ctx := auth.AddUserToContext(context.Background(), uploader)
+	r, album, deleter, uploader, readOnly, _ := setupMediaManageTest(t)
+	ctx := auth.AddUserToContext(context.Background(), deleter)
 
 	t.Run("happy path moves the file to trash and removes the row and its dependents", func(t *testing.T) {
 		media := makeTestMediaFile(t, r, album, "to_delete.jpg")
@@ -210,11 +215,29 @@ func TestDeleteMedia(t *testing.T) {
 		_, statErr := os.Stat(media.Path)
 		assert.NoError(t, statErr, "file should be untouched after a denied delete")
 	})
+
+	t.Run("upload access alone is not enough to delete", func(t *testing.T) {
+		media := makeTestMediaFile(t, r, album, "upload_only.jpg")
+		uploaderCtx := auth.AddUserToContext(context.Background(), uploader)
+
+		ok, err := r.DeleteMedia(uploaderCtx, media.ID)
+		assert.Error(t, err)
+		assert.False(t, ok)
+
+		_, statErr := os.Stat(media.Path)
+		assert.NoError(t, statErr, "file should be untouched after a denied delete")
+	})
+
+	t.Run("a missing media id is refused like an unauthorized one", func(t *testing.T) {
+		ok, err := r.DeleteMedia(ctx, 999999)
+		assert.Error(t, err)
+		assert.False(t, ok)
+	})
 }
 
 func TestDeleteMediaList(t *testing.T) {
-	r, album, uploader, readOnly, _ := setupMediaManageTest(t)
-	ctx := auth.AddUserToContext(context.Background(), uploader)
+	r, album, deleter, _, readOnly, _ := setupMediaManageTest(t)
+	ctx := auth.AddUserToContext(context.Background(), deleter)
 
 	t.Run("mixed batch: owned files succeed independently of a denied one", func(t *testing.T) {
 		media1 := makeTestMediaFile(t, r, album, "batch1.jpg")
@@ -227,7 +250,7 @@ func TestDeleteMediaList(t *testing.T) {
 		}).Error)
 		deniedMedia := makeTestMediaFile(t, r, otherAlbum, "denied.jpg")
 
-		// Run as uploader against a mix of two files they own and one in an
+		// Run as deleter against a mix of two files they own and one in an
 		// album they have no access to at all, to exercise per-item
 		// success/failure in a single call.
 		results, err := r.DeleteMediaList(ctx, []int{media1.ID, media2.ID, deniedMedia.ID})
@@ -240,7 +263,7 @@ func TestDeleteMediaList(t *testing.T) {
 		assert.Nil(t, results[0].Error)
 		assert.True(t, results[1].Success)
 		assert.Nil(t, results[1].Error)
-		assert.False(t, results[2].Success, "uploader has no access to otherAlbum, this item should fail")
+		assert.False(t, results[2].Success, "deleter has no access to otherAlbum, this item should fail")
 		assert.NotNil(t, results[2].Error)
 
 		_, statErr := os.Stat(media1.Path)
