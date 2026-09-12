@@ -280,6 +280,7 @@
         "tera_byte_many": "",
         "tera_byte_other": ""
       },
+      "share": "",
       "table_columns": {
         "dimensions": "Dimensioni",
         "file_size": "Peso",

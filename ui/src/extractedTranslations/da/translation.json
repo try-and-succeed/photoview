@@ -275,6 +275,7 @@
         "tera_byte_one": "",
         "tera_byte_other": ""
       },
+      "share": "",
       "table_columns": {
         "dimensions": "Dimension",
         "file_size": "Størrelse",
