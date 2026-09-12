@@ -139,8 +139,8 @@
     "heading": "Search results for \"{{query}}\"",
     "no_results": "No results found",
     "title": "Search results for \"{{query}}\"",
-    "truncated_one": "Showing the first {{count}} matches. Narrow the search to see fewer, more relevant results.",
-    "truncated_other": "Showing the first {{count}} matches. Narrow the search to see fewer, more relevant results."
+    "truncated_one": "Albums and photos are each capped at {{count}} results, so there may be more than is shown here. Narrow the search to see fewer, more relevant results.",
+    "truncated_other": "Albums and photos are each capped at {{count}} results, so there may be more than is shown here. Narrow the search to see fewer, more relevant results."
   },
   "settings": {
     "concurrent_workers": {

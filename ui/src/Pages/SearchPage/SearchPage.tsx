@@ -168,7 +168,7 @@ const SearchPage = () => {
         <div className="text-gray-400 mb-4">
           {t(
             'search_page.truncated',
-            'Showing the first {{count}} matches. Narrow the search to see fewer, more relevant results.',
+            'Albums and photos are each capped at {{count}} results, so there may be more than is shown here. Narrow the search to see fewer, more relevant results.',
             { count: SEARCH_PAGE_LIMIT }
           )}
         </div>

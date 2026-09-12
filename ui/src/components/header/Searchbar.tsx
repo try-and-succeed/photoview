@@ -64,10 +64,13 @@ const DROPDOWN_MAX_ROWS = 500
 // thrown away on arrival, so fetching them only costs a bigger response on
 // every keystroke - and an unlimited preference would otherwise transfer the
 // whole library each time.
+// Zero means unlimited, and anything below it could only have been stored by
+// bypassing the settings field - the search layer would read either as
+// "no limit", so both get the cap rather than the whole library.
 const dropdownRequestLimit = (preference: number | undefined) =>
-  preference === undefined || preference === 0 || preference > DROPDOWN_MAX_ROWS
+  preference === undefined || preference <= 0
     ? DROPDOWN_MAX_ROWS
-    : preference
+    : Math.min(preference, DROPDOWN_MAX_ROWS)
 
 const SearchWrapper = styled.div.attrs({
   className: 'w-full max-w-xs lg:relative',
