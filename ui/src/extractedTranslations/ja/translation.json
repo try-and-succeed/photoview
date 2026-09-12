@@ -138,7 +138,8 @@
     "error": "",
     "heading": "",
     "no_results": "",
-    "title": ""
+    "title": "",
+    "truncated_other": ""
   },
   "settings": {
     "concurrent_workers": {

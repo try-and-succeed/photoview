@@ -27,7 +27,11 @@ const preferencesMock = (searchResultLimit: number | null) => ({
   },
 })
 
-const searchVariables = (limit: number | undefined) => ({
+// What the dropdown actually asks for: an unset or unlimited preference is
+// clamped to the number of rows it will render at most.
+const DROPDOWN_MAX_ROWS = 500
+
+const searchVariables = (limit: number) => ({
   query: 'vac',
   limitMedia: limit,
   limitAlbums: limit,
@@ -110,7 +114,7 @@ test('re-issues the search when the limit preference changes to unlimited', asyn
         },
       },
       {
-        request: { query: SEARCH_QUERY, variables: searchVariables(0) },
+        request: { query: SEARCH_QUERY, variables: searchVariables(DROPDOWN_MAX_ROWS) },
         result: () => {
           sawUnlimited = true
           return emptyResult
@@ -144,7 +148,7 @@ test('drops the thumbnails once the result list gets long', async () => {
   renderSearchBar([
     preferencesMock(null),
     {
-      request: { query: SEARCH_QUERY, variables: searchVariables(undefined) },
+      request: { query: SEARCH_QUERY, variables: searchVariables(DROPDOWN_MAX_ROWS) },
       result: {
         data: {
           search: {
@@ -178,7 +182,7 @@ test('keeps the thumbnails for a short result list', async () => {
   renderSearchBar([
     preferencesMock(null),
     {
-      request: { query: SEARCH_QUERY, variables: searchVariables(undefined) },
+      request: { query: SEARCH_QUERY, variables: searchVariables(DROPDOWN_MAX_ROWS) },
       result: {
         data: {
           search: {

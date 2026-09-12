@@ -12,7 +12,7 @@ vi.mock('../../components/layout/Layout', () => ({
 }))
 
 const searchPageMock = (query: string, albumTitle: string) => ({
-  request: { query: SEARCH_PAGE_QUERY, variables: { query } },
+  request: { query: SEARCH_PAGE_QUERY, variables: { query, limit: 500 } },
   result: {
     data: {
       search: {

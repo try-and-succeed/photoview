@@ -122,4 +122,5 @@ export interface searchPageQuery {
 
 export interface searchPageQueryVariables {
   query: string;
+  limit?: number | null;
 }

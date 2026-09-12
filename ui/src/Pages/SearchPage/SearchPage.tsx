@@ -17,11 +17,17 @@ import {
   searchPageQuery_search_media,
 } from './__generated__/searchPageQuery'
 
+// The page exists to show everything the dropdown could not, but "everything"
+// against a large library is a response nobody can use: one gallery per album
+// and every matching file rendered at once. Bounded high enough that a normal
+// search never notices, with a note when it does bite.
+const SEARCH_PAGE_LIMIT = 500
+
 export const SEARCH_PAGE_QUERY = gql`
   ${MEDIA_GALLERY_FRAGMENT}
 
-  query searchPageQuery($query: String!) {
-    search(query: $query, limitAlbums: 0, limitMedia: 0) {
+  query searchPageQuery($query: String!, $limit: Int) {
+    search(query: $query, limitAlbums: $limit, limitMedia: $limit) {
       albums {
         id
         title
@@ -112,14 +118,14 @@ const SearchPage = () => {
   // Not useURLParameters: it snapshots the URL once on mount, so searching
   // again from this very page would keep querying the previous term.
   const [searchParams] = useSearchParams()
-  const query = searchParams.get('q') ?? ''
+  const query = (searchParams.get('q') ?? '').trim()
 
   const { data, loading, error } = useQuery<
     searchPageQuery,
     searchPageQueryVariables
   >(SEARCH_PAGE_QUERY, {
-    variables: { query },
-    skip: query.trim() === '',
+    variables: { query, limit: SEARCH_PAGE_LIMIT },
+    skip: query === '',
   })
 
   const albums = data?.search.albums ?? []
@@ -127,6 +133,10 @@ const SearchPage = () => {
 
   const noResults =
     !loading && data != null && albums.length === 0 && mediaGroups.length === 0
+
+  const truncated =
+    albums.length >= SEARCH_PAGE_LIMIT ||
+    (data?.search.media.length ?? 0) >= SEARCH_PAGE_LIMIT
 
   return (
     <Layout
@@ -151,6 +161,16 @@ const SearchPage = () => {
       {noResults && (
         <div className="text-gray-400">
           {t('search_page.no_results', 'No results found')}
+        </div>
+      )}
+
+      {truncated && (
+        <div className="text-gray-400 mb-4">
+          {t(
+            'search_page.truncated',
+            'Showing the first {{count}} matches. Narrow the search to see fewer, more relevant results.',
+            { count: SEARCH_PAGE_LIMIT }
+          )}
         </div>
       )}
 

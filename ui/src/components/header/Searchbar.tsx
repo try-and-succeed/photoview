@@ -60,6 +60,15 @@ const DROPDOWN_COMPACT_THRESHOLD = 50
 // leads to the complete list.
 const DROPDOWN_MAX_ROWS = 500
 
+// What the dropdown asks the server for. Rows beyond DROPDOWN_MAX_ROWS are
+// thrown away on arrival, so fetching them only costs a bigger response on
+// every keystroke - and an unlimited preference would otherwise transfer the
+// whole library each time.
+const dropdownRequestLimit = (preference: number | undefined) =>
+  preference === undefined || preference === 0 || preference > DROPDOWN_MAX_ROWS
+    ? DROPDOWN_MAX_ROWS
+    : preference
+
 const SearchWrapper = styled.div.attrs({
   className: 'w-full max-w-xs lg:relative',
 })``
@@ -89,8 +98,8 @@ const SearchBar = () => {
       fetchSearches({
         variables: {
           query,
-          limitMedia: searchResultLimitRef.current,
-          limitAlbums: searchResultLimitRef.current,
+          limitMedia: dropdownRequestLimit(searchResultLimitRef.current),
+          limitAlbums: dropdownRequestLimit(searchResultLimitRef.current),
         },
       })
       setFetched(true)
@@ -115,8 +124,8 @@ const SearchBar = () => {
       fetchSearches({
         variables: {
           query: query.trim(),
-          limitMedia: searchResultLimit,
-          limitAlbums: searchResultLimit,
+          limitMedia: dropdownRequestLimit(searchResultLimit),
+          limitAlbums: dropdownRequestLimit(searchResultLimit),
         },
       })
     }
