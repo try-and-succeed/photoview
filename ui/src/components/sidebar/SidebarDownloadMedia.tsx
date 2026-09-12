@@ -288,7 +288,7 @@ type SidebarShareMediaButtonProps = {
   rows: SidebarDownloadTableRow[]
 }
 
-const SidebarShareMediaButton = ({
+export const SidebarShareMediaButton = ({
   media,
   rows,
 }: SidebarShareMediaButtonProps) => {
@@ -331,12 +331,19 @@ const SidebarShareMediaButton = ({
       }
       if (file == null) return
 
+      // Kept before the canShare check rather than after it: the link fallback
+      // below shares the download that may have cost us the activation, so it
+      // can fail the same way. Holding the file from here on means the retry
+      // skips that download whichever of the two branches it lands in.
+      preparedFile.current = { url: row.url, file }
+
       if (!navigator.canShare({ files: [file] })) {
         await shareLink()
+        preparedFile.current = null
+        setRetry(false)
         return
       }
 
-      preparedFile.current = { url: row.url, file }
       await navigator.share({ files: [file], title: media.title ?? undefined })
       preparedFile.current = null
       setRetry(false)
