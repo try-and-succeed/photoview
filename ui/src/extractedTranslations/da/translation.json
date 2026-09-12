@@ -15,6 +15,17 @@
       "type": "Type"
     }
   },
+  "album_tree": {
+    "children_error": "",
+    "collapse": "",
+    "empty": "",
+    "error": "",
+    "expand": "",
+    "label": "",
+    "mobile_open": "",
+    "no_matches": "",
+    "search_error": ""
+  },
   "general": {
     "action": {
       "add": "Tilføj",
@@ -22,6 +33,7 @@
       "remove": "Fjern",
       "save": "Gem"
     },
+    "close": "",
     "loading": {
       "album": "Loader album",
       "default": "Loader...",
@@ -165,6 +177,11 @@
       },
       "language_selector": {
         "placeholder": "Vælg sprog"
+      },
+      "show_album_tree": {
+        "checkbox_label": "",
+        "description": "",
+        "title": ""
       },
       "theme": {
         "auto": {

@@ -15,6 +15,17 @@
       "type": "Вид"
     }
   },
+  "album_tree": {
+    "children_error": "",
+    "collapse": "",
+    "empty": "",
+    "error": "",
+    "expand": "",
+    "label": "",
+    "mobile_open": "",
+    "no_matches": "",
+    "search_error": ""
+  },
   "general": {
     "action": {
       "add": "Добавить",
@@ -22,6 +33,7 @@
       "remove": "Убрать",
       "save": "Сохранить"
     },
+    "close": "",
     "loading": {
       "album": "Загрузка альбома",
       "default": "Загрузка...",
@@ -165,6 +177,11 @@
       },
       "language_selector": {
         "placeholder": "Выбрать язык"
+      },
+      "show_album_tree": {
+        "checkbox_label": "",
+        "description": "",
+        "title": ""
       },
       "theme": {
         "auto": {
