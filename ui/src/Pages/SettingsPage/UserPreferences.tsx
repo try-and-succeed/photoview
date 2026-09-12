@@ -16,6 +16,7 @@ import {
   changeUserPreferencesVariables,
 } from './__generated__/changeUserPreferences'
 import { myUserPreferences } from './__generated__/myUserPreferences'
+import { myUsername } from './__generated__/myUsername'
 import { TranslationFn } from '../../localization'
 import { changeTheme, getTheme } from '../../theme'
 
@@ -81,6 +82,15 @@ const MY_USER_PREFERENCES = gql`
   }
 `
 
+const MY_USERNAME_QUERY = gql`
+  query myUsername {
+    myUser {
+      id
+      username
+    }
+  }
+`
+
 const LogoutButton = () => {
   const { t } = useTranslation()
 
@@ -110,6 +120,7 @@ const UserPreferences = () => {
   }
 
   const { data } = useQuery<myUserPreferences>(MY_USER_PREFERENCES)
+  const { data: usernameData } = useQuery<myUsername>(MY_USERNAME_QUERY)
 
   const [changePrefs, { loading: loadingPrefs, error }] = useMutation<
     changeUserPreferences,
@@ -157,7 +168,13 @@ const UserPreferences = () => {
   return (
     <UserPreferencesWrapper>
       <SectionTitle nospace>
-        {t('settings.user_preferences.title', 'User preferences')}
+        {usernameData?.myUser
+          ? t(
+              'settings.user_preferences.title_with_username',
+              'User preferences ({{username}})',
+              { username: usernameData.myUser.username }
+            )
+          : t('settings.user_preferences.title', 'User preferences')}
       </SectionTitle>
       <LogoutButton />
       <label htmlFor="user_pref_change_language_field">
