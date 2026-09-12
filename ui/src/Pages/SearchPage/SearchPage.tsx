@@ -1,7 +1,7 @@
 import { gql, useQuery } from '@apollo/client'
 import React, { useEffect, useReducer } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import AlbumBoxes from '../../components/albumGallery/AlbumBoxes'
 import Layout from '../../components/layout/Layout'
 import MediaGallery, {
@@ -11,14 +11,13 @@ import {
   mediaGalleryReducer,
   urlPresentModeSetupHook,
 } from '../../components/photoGallery/mediaGalleryReducer'
-import useURLParameters from '../../hooks/useURLParameters'
 import {
   searchPageQuery,
   searchPageQueryVariables,
   searchPageQuery_search_media,
 } from './__generated__/searchPageQuery'
 
-const SEARCH_PAGE_QUERY = gql`
+export const SEARCH_PAGE_QUERY = gql`
   ${MEDIA_GALLERY_FRAGMENT}
 
   query searchPageQuery($query: String!) {
@@ -110,8 +109,10 @@ const SearchAlbumMediaGroup = ({ id, title, media }: MediaAlbumGroup) => {
 
 const SearchPage = () => {
   const { t } = useTranslation()
-  const urlParams = useURLParameters()
-  const query = urlParams.getParam('q') ?? ''
+  // Not useURLParameters: it snapshots the URL once on mount, so searching
+  // again from this very page would keep querying the previous term.
+  const [searchParams] = useSearchParams()
+  const query = searchParams.get('q') ?? ''
 
   const { data, loading, error } = useQuery<
     searchPageQuery,

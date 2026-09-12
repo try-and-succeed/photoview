@@ -62,7 +62,7 @@ func Search(db *gorm.DB, query string, userID int, limitMedia *int, limitAlbums 
 		Where("LOWER(albums.title) LIKE ? OR LOWER(albums.path) LIKE ?", wildQuery, wildQuery).
 		Clauses(clause.OrderBy{
 			Expression: clause.Expr{
-				SQL:                "(CASE WHEN LOWER(albums.title) LIKE ? THEN 2 WHEN LOWER(albums.path) LIKE ? THEN 1 END) DESC, albums.title DESC",
+				SQL:                "(CASE WHEN LOWER(albums.title) LIKE ? THEN 2 WHEN LOWER(albums.path) LIKE ? THEN 1 END) DESC, albums.title DESC, albums.id DESC",
 				Vars:               []interface{}{wildQuery, wildQuery},
 				WithoutParentheses: true},
 		})

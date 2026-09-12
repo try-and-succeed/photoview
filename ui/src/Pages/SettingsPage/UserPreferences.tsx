@@ -135,24 +135,22 @@ const UserPreferences = () => {
   const savedSearchLimit = data?.myUserPreferences.searchResultLimit
   const [searchLimitInput, setSearchLimitInput] = useState('')
 
-  useEffect(() => {
-    setSearchLimitInput(
-      savedSearchLimit == null ? '' : String(savedSearchLimit)
-    )
-  }, [savedSearchLimit])
+  const showSavedSearchLimit = () =>
+    setSearchLimitInput(savedSearchLimit == null ? '' : String(savedSearchLimit))
+
+  useEffect(showSavedSearchLimit, [savedSearchLimit])
 
   const commitSearchLimit = () => {
     const trimmed = searchLimitInput.trim()
-    // An empty field means "whatever the server does by default", which is
-    // also the state of a user who never touched this - so there is nothing
-    // to save.
-    if (trimmed === '') return
-
     const parsed = Number(trimmed)
-    if (!Number.isInteger(parsed) || parsed < 0) {
-      setSearchLimitInput(
-        savedSearchLimit == null ? '' : String(savedSearchLimit)
-      )
+
+    // An emptied or nonsensical field puts the saved value back, rather than
+    // leaving the field showing something that was never stored. Note that
+    // once a limit is saved there is no way back to "whatever the server
+    // does by default" - 0 already means unlimited, so the argument has no
+    // spare value left to mean "forget my setting".
+    if (trimmed === '' || !Number.isInteger(parsed) || parsed < 0) {
+      showSavedSearchLimit()
       return
     }
 
