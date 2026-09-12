@@ -75,6 +75,31 @@ func TestAlbumTreeChildren(t *testing.T) {
 		assert.Empty(t, result)
 	})
 
+	t.Run("access inherited from an ancestor counts too", func(t *testing.T) {
+		// A user linked only to a root owns everything below it, which the
+		// direct user_albums lookup alone would miss.
+		heir, err := models.RegisterUser(db, "tree_heir", nil, false)
+		assert.NoError(t, err)
+		assert.NoError(t, db.Model(&heir).Association("Albums").Append(&ownedRoot))
+
+		result, err := r.AlbumTreeChildren(auth.AddUserToContext(context.Background(), heir), []int{ownedChild.ID})
+		assert.NoError(t, err)
+
+		if assert.Len(t, result, 1) {
+			assert.Equal(t, ownedChild.ID, result[0].AlbumID)
+		}
+	})
+
+	t.Run("an oversized request is refused rather than built into a huge query", func(t *testing.T) {
+		tooMany := make([]int, maxAlbumTreeChildrenIDs+1)
+		for i := range tooMany {
+			tooMany[i] = ownedRoot.ID
+		}
+
+		_, err := r.AlbumTreeChildren(auth.AddUserToContext(context.Background(), user), tooMany)
+		assert.Error(t, err)
+	})
+
 	t.Run("an unauthenticated request is refused", func(t *testing.T) {
 		_, err := r.AlbumTreeChildren(context.Background(), []int{ownedRoot.ID})
 		assert.Error(t, err)

@@ -161,6 +161,13 @@ func (r *queryResolver) Album(ctx context.Context, id int, tokenCredentials *mod
 	return actions.Album(db, user, id)
 }
 
+// maxAlbumTreeChildrenIDs bounds one albumTreeChildren request. The ids come
+// from the client, and the filter view sends every match plus its ancestors
+// with no search limit, so a broad match against a large library could
+// otherwise build an IN clause past the database driver's parameter limit. A
+// tree with this many visible nodes is beyond useful anyway.
+const maxAlbumTreeChildrenIDs = 500
+
 // AlbumTreeChildren is the resolver for the albumTreeChildren field.
 func (r *queryResolver) AlbumTreeChildren(ctx context.Context, albumIds []int) ([]*models.AlbumTreeChildren, error) {
 	db := r.DB(ctx)
@@ -169,40 +176,45 @@ func (r *queryResolver) AlbumTreeChildren(ctx context.Context, albumIds []int) (
 		return []*models.AlbumTreeChildren{}, nil
 	}
 
+	if len(albumIds) > maxAlbumTreeChildrenIDs {
+		return nil, fmt.Errorf("too many albums requested at once (%d, limit %d)", len(albumIds), maxAlbumTreeChildrenIDs)
+	}
+
 	user := auth.UserFromContext(ctx)
 	if user == nil {
 		return nil, auth.ErrUnauthorized
 	}
 
-	var albums []*models.Album
-
-	query := db.Where("parent_album_id IN (?)", albumIds)
-
 	// Unlike the subAlbums field resolver, which is only reachable through an
-	// Album the caller was already authorized to load, this is a top-level
-	// query taking raw album ids straight from the client. Without this a
-	// non-admin could pass another user's album id and read its children's
-	// titles and paths.
-	if !user.Admin {
-		query = query.Where("id IN (?)",
-			db.Table("user_albums").Select("album_id").Where("user_id = ?", user.ID))
-	}
-
-	orderByTitle := "title"
-	query = models.FormatSQL(query, &models.Ordering{OrderBy: &orderByTitle}, nil)
-
-	if err := query.Find(&albums).Error; err != nil {
+	// album the caller was already authorized to load, this takes raw ids
+	// straight from the client - so the parents are authorized here, and
+	// their children then follow as they do for subAlbums.
+	authorizedIDs, err := r.authorizedAlbumIDs(ctx, user, albumIds)
+	if err != nil {
 		return nil, err
 	}
 
-	byParent := make(map[int][]*models.Album, len(albumIds))
+	byParent := make(map[int][]*models.Album, len(authorizedIDs))
 
-	for _, album := range albums {
-		if album.ParentAlbumID == nil {
-			continue
+	if len(authorizedIDs) > 0 {
+		var albums []*models.Album
+
+		orderByTitle := "title"
+		query := models.FormatSQL(
+			db.Where("parent_album_id IN (?)", authorizedIDs),
+			&models.Ordering{OrderBy: &orderByTitle}, nil)
+
+		if err := query.Find(&albums).Error; err != nil {
+			return nil, err
 		}
 
-		byParent[*album.ParentAlbumID] = append(byParent[*album.ParentAlbumID], album)
+		for _, album := range albums {
+			if album.ParentAlbumID == nil {
+				continue
+			}
+
+			byParent[*album.ParentAlbumID] = append(byParent[*album.ParentAlbumID], album)
+		}
 	}
 
 	result := make([]*models.AlbumTreeChildren, len(albumIds))
@@ -214,6 +226,61 @@ func (r *queryResolver) AlbumTreeChildren(ctx context.Context, albumIds []int) (
 	}
 
 	return result, nil
+}
+
+// authorizedAlbumIDs narrows albumIds to the ones user may see. Access is
+// inherited, so a direct user_albums row is the common case but not the only
+// one: a user linked only to a root album owns everything below it. The set
+// lookup answers the common case without a query per album, and only the ids
+// it misses fall back to the ancestor walk OwnsAlbum performs.
+func (r *queryResolver) authorizedAlbumIDs(ctx context.Context, user *models.User, albumIds []int) ([]int, error) {
+	if user.Admin {
+		return albumIds, nil
+	}
+
+	db := r.DB(ctx)
+
+	var directIDs []int
+	if err := db.Table("user_albums").
+		Where("user_id = ? AND album_id IN (?)", user.ID, albumIds).
+		Pluck("album_id", &directIDs).Error; err != nil {
+		return nil, err
+	}
+
+	direct := make(map[int]struct{}, len(directIDs))
+	for _, id := range directIDs {
+		direct[id] = struct{}{}
+	}
+
+	authorized := make([]int, 0, len(albumIds))
+
+	for _, albumID := range albumIds {
+		if _, found := direct[albumID]; found {
+			authorized = append(authorized, albumID)
+
+			continue
+		}
+
+		var album models.Album
+		if err := db.First(&album, albumID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				continue
+			}
+
+			return nil, err
+		}
+
+		owns, err := user.OwnsAlbum(db, &album)
+		if err != nil {
+			return nil, err
+		}
+
+		if owns {
+			authorized = append(authorized, albumID)
+		}
+	}
+
+	return authorized, nil
 }
 
 // Album returns api.AlbumResolver implementation.

@@ -148,14 +148,15 @@ const AlbumTreeNode = ({
               : t('album_tree.expand', 'Expand album')
           }
           onClick={() => {
-            // A failed fetch leaves `called` true, so the effect above
-            // won't retry it on its own - let a click while expanded and
-            // errored retry directly instead of just toggling collapsed.
-            if (isExpanded && error) {
+            // A failed fetch leaves `called` true, so the effect above won't
+            // retry on its own. Retry when an errored node is opened again -
+            // but always perform the toggle too, or an errored node could
+            // never be collapsed, every click going into another retry.
+            if (!isExpanded && error) {
               fetchSubAlbums()
-            } else {
-              toggleExpand(album.id)
             }
+
+            toggleExpand(album.id)
           }}
           disabled={isFiltering}
           className={tailwindClassNames(

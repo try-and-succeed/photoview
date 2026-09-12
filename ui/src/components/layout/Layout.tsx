@@ -42,9 +42,14 @@ const Layout = ({ children, title, ...otherProps }: LayoutProps) => {
     { skip: !token }
   )
 
+  // Only once the preference is actually in: defaulting to true while it is
+  // still loading would mount the tree, fire its root query, and unmount it
+  // again as soon as a stored "off" arrives - a wasted query and a flash.
+  // A resolved but unset preference still means on.
   const showAlbumTree =
     !!token &&
-    (albumTreePreferenceQuery.data?.myUserPreferences.showAlbumTree ?? true)
+    albumTreePreferenceQuery.data != null &&
+    (albumTreePreferenceQuery.data.myUserPreferences.showAlbumTree ?? true)
 
   return (
     <>
