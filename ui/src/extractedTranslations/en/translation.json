@@ -41,7 +41,8 @@
       "result_type": {
         "albums": "Albums",
         "media": "Media"
-      }
+      },
+      "view_all_results": "View all results"
     }
   },
   "login_page": {
@@ -131,6 +132,13 @@
   },
   "routes": {
     "page_not_found": "Page not found"
+  },
+  "search_page": {
+    "albums_heading": "Albums",
+    "error": "Error loading results",
+    "heading": "Search results for \"{{query}}\"",
+    "no_results": "No results found",
+    "title": "Search results for \"{{query}}\""
   },
   "settings": {
     "concurrent_workers": {

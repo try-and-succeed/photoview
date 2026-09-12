@@ -41,7 +41,8 @@
       "result_type": {
         "albums": "相簿",
         "media": "媒體"
-      }
+      },
+      "view_all_results": ""
     }
   },
   "login_page": {
@@ -131,6 +132,13 @@
   },
   "routes": {
     "page_not_found": "找不到頁面"
+  },
+  "search_page": {
+    "albums_heading": "",
+    "error": "",
+    "heading": "",
+    "no_results": "",
+    "title": ""
   },
   "settings": {
     "concurrent_workers": {

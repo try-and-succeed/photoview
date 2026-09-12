@@ -41,7 +41,8 @@
       "result_type": {
         "albums": "アルバム",
         "media": "メディア"
-      }
+      },
+      "view_all_results": ""
     }
   },
   "login_page": {
@@ -131,6 +132,13 @@
   },
   "routes": {
     "page_not_found": "ページが見つかりません"
+  },
+  "search_page": {
+    "albums_heading": "",
+    "error": "",
+    "heading": "",
+    "no_results": "",
+    "title": ""
   },
   "settings": {
     "concurrent_workers": {
