@@ -114,7 +114,10 @@ test('re-issues the search when the limit preference changes to unlimited', asyn
         },
       },
       {
-        request: { query: SEARCH_QUERY, variables: searchVariables(DROPDOWN_MAX_ROWS) },
+        request: {
+          query: SEARCH_QUERY,
+          variables: searchVariables(DROPDOWN_MAX_ROWS),
+        },
         result: () => {
           sawUnlimited = true
           return emptyResult
@@ -148,7 +151,10 @@ test('drops the thumbnails once the result list gets long', async () => {
   renderSearchBar([
     preferencesMock(null),
     {
-      request: { query: SEARCH_QUERY, variables: searchVariables(DROPDOWN_MAX_ROWS) },
+      request: {
+        query: SEARCH_QUERY,
+        variables: searchVariables(DROPDOWN_MAX_ROWS),
+      },
       result: {
         data: {
           search: {
@@ -182,7 +188,10 @@ test('keeps the thumbnails for a short result list', async () => {
   renderSearchBar([
     preferencesMock(null),
     {
-      request: { query: SEARCH_QUERY, variables: searchVariables(DROPDOWN_MAX_ROWS) },
+      request: {
+        query: SEARCH_QUERY,
+        variables: searchVariables(DROPDOWN_MAX_ROWS),
+      },
       result: {
         data: {
           search: {
