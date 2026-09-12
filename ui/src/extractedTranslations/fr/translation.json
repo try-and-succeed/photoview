@@ -281,6 +281,7 @@
         "tera_byte_other": "{{count}} To"
       },
       "share": "",
+      "share_again": "",
       "table_columns": {
         "dimensions": "Dimensions",
         "file_size": "Taille",

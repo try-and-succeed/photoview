@@ -286,6 +286,7 @@
         "tera_byte_other": ""
       },
       "share": "",
+      "share_again": "",
       "table_columns": {
         "dimensions": "Габариты",
         "file_size": "Размер",

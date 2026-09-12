@@ -5,7 +5,7 @@ import { authToken } from '../../helpers/authentication'
 import { TranslationFn } from '../../localization'
 import { MessageState } from '../messages/Messages'
 import { MediaSidebarMedia } from './MediaSidebar/MediaSidebar'
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { SidebarSection, SidebarSectionTitle } from './SidebarComponents'
 import SidebarTable from './SidebarTable'
 import { ReactComponent as ShareIcon } from './icons/shareNativeIcon.svg'
@@ -294,6 +294,10 @@ const SidebarShareMediaButton = ({
 }: SidebarShareMediaButtonProps) => {
   const { t } = useTranslation()
   const [sharing, setSharing] = useState(false)
+  const [retry, setRetry] = useState(false)
+  // A file already prepared for a share that the browser then refused. Keeping
+  // it means the retry needs no download and so stays inside its activation.
+  const preparedFile = useRef<{ url: string; file: File } | null>(null)
 
   const row = pickShareRow(rows)
 
@@ -318,30 +322,48 @@ const SidebarShareMediaButton = ({
         return
       }
 
-      const blob = await fetchMediaBlobQuiet(row.url)
+      let file = preparedFile.current?.file
+      if (preparedFile.current?.url !== row.url) {
+        const blob = await fetchMediaBlobQuiet(row.url)
 
-      const filename = row.url.match(/[^/]*$/)?.[0] ?? media.title ?? 'photo'
-      const file = new File([blob], filename, { type: blob.type })
+        const filename = row.url.match(/[^/]*$/)?.[0] ?? media.title ?? 'photo'
+        file = new File([blob], filename, { type: blob.type })
+      }
+      if (file == null) return
 
       if (!navigator.canShare({ files: [file] })) {
         await shareLink()
         return
       }
 
+      preparedFile.current = { url: row.url, file }
       await navigator.share({ files: [file], title: media.title ?? undefined })
+      preparedFile.current = null
+      setRetry(false)
     } catch (err) {
       if ((err as Error)?.name === 'AbortError') {
+        preparedFile.current = null
+        setRetry(false)
         return
       }
 
       console.error('Native share failed', err)
 
-      // The file couldn't be prepared or the sheet refused it, but the link
-      // is still shareable, so try that rather than ending in nothing. It
-      // may itself fail: a slow download can outlast the user activation
-      // that the share sheet needs, and this attempt does not bring it
-      // back. Nothing can, short of downloading before the user asks or
-      // making them tap twice, and neither is worth it for the common case.
+      // A download slow enough to outlast the user activation leaves the share
+      // sheet refusing to open, and the link fallback below has no activation
+      // left either - so the tap would end in nothing at all. The file is
+      // ready now, though, and the kept copy means a second tap opens the
+      // sheet straight away. Asking for that tap only here keeps the common
+      // case at one.
+      if ((err as Error)?.name === 'NotAllowedError' && preparedFile.current) {
+        setRetry(true)
+
+        return
+      }
+
+      // The file couldn't be prepared or the sheet refused it for some other
+      // reason, but the link is still shareable, so try that rather than
+      // ending in nothing.
       try {
         await shareLink()
       } catch (fallbackErr) {
@@ -362,7 +384,11 @@ const SidebarShareMediaButton = ({
         onClick={share}
       >
         <ShareIcon className="inline-block mr-2" />
-        <span>{t('sidebar.download.share', 'Share')}</span>
+        <span>
+          {retry
+            ? t('sidebar.download.share_again', 'Tap share again')
+            : t('sidebar.download.share', 'Share')}
+        </span>
       </button>
     </div>
   )

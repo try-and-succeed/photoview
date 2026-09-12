@@ -276,6 +276,7 @@
         "tera_byte_other": "{{count}} TB"
       },
       "share": "",
+      "share_again": "",
       "table_columns": {
         "dimensions": "Afmetingen",
         "file_size": "Grootte",

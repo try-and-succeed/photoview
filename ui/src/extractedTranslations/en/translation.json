@@ -276,6 +276,7 @@
         "tera_byte_other": "{{count}} TB"
       },
       "share": "Share",
+      "share_again": "Tap share again",
       "table_columns": {
         "dimensions": "Dimensions",
         "file_size": "Size",

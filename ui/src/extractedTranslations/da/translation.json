@@ -276,6 +276,7 @@
         "tera_byte_other": ""
       },
       "share": "",
+      "share_again": "",
       "table_columns": {
         "dimensions": "Dimension",
         "file_size": "Størrelse",
