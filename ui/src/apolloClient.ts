@@ -146,6 +146,13 @@ const linkError = onError(({ graphQLErrors, networkError, operation }) => {
         header: 'Multiple server errors',
         content: `Received ${errors.length} errors from the server.${recoveryNote}`,
       })
+    } else {
+      // A connection that never reached the server carries no errors to
+      // report, which would otherwise leave the user with nothing at all.
+      errorMessages.push({
+        header: 'Network error',
+        content: `Could not reach the server.${recoveryNote}`,
+      })
     }
   }
 

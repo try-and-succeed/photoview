@@ -117,6 +117,22 @@ const PresentNavigationOverlay = ({
     }
   }, [])
 
+  useEffect(() => {
+    // Hidden controls are taken out of the tab order entirely, so a keyboard
+    // user has no way to reach them - and no pointer to move. Any key press
+    // reveals them, the same as a mouse movement or a tap, which then puts
+    // them back within reach of Tab.
+    const revealOnKey = () => {
+      onMouseMove.current && onMouseMove.current()
+    }
+
+    document.addEventListener('keydown', revealOnKey)
+
+    return () => {
+      document.removeEventListener('keydown', revealOnKey)
+    }
+  }, [])
+
   const handlers = useSwipeable({
     onSwipedLeft: () => dispatchMedia({ type: 'nextImage' }),
     onSwipedRight: () => dispatchMedia({ type: 'previousImage' }),
