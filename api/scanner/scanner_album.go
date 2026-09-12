@@ -113,6 +113,13 @@ func ScanAlbum(ctx scanner_task.TaskContext) error {
 
 	changedMedia := make([]*models.Media, 0)
 	for i, media := range albumMedia {
+		// Cancellation is checked between files, never mid-file, so an
+		// encode in flight always finishes cleanly instead of leaving a
+		// half-written cache entry behind.
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
 		mediaData := media_encoding.NewEncodeMediaData(media)
 
 		if err := scanMedia(ctx, media, &mediaData, i, len(albumMedia)); err != nil {
@@ -137,6 +144,10 @@ func findMediaForAlbum(ctx scanner_task.TaskContext) ([]*models.Media, error) {
 	}
 
 	for _, item := range dirContent {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
 		mediaPath := path.Join(ctx.GetAlbum().Path, item.Name())
 		log.Info(ctx, "Check the media", "media_path", mediaPath)
 
