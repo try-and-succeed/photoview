@@ -50,4 +50,24 @@ func TestChangeUserPreferencesSearchResultLimit(t *testing.T) {
 			assert.Equal(t, 0, *prefs.SearchResultLimit)
 		}
 	})
+
+	t.Run("changing one preference leaves the others alone", func(t *testing.T) {
+		limit := 40
+		_, err := r.ChangeUserPreferences(ctx, nil, &limit)
+		assert.NoError(t, err)
+
+		language := string(models.LanguageTranslationGerman)
+		prefs, err := r.ChangeUserPreferences(ctx, &language, nil)
+		assert.NoError(t, err)
+		if !assert.NotNil(t, prefs) {
+			return
+		}
+
+		if assert.NotNil(t, prefs.SearchResultLimit, "a language change must not reset the search limit") {
+			assert.Equal(t, 40, *prefs.SearchResultLimit)
+		}
+		if assert.NotNil(t, prefs.Language) {
+			assert.Equal(t, models.LanguageTranslationGerman, *prefs.Language)
+		}
+	})
 }

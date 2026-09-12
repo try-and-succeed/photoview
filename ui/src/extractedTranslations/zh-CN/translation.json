@@ -174,6 +174,10 @@
       "language_selector": {
         "placeholder": "选择语言"
       },
+      "search_result_limit": {
+        "description": "",
+        "label": ""
+      },
       "theme": {
         "auto": {
           "label": "跟随系统"

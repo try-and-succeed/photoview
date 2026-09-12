@@ -13,6 +13,10 @@ export interface myUserPreferences_myUserPreferences {
   __typename: "UserPreferences";
   id: string;
   language: LanguageTranslation | null;
+  /**
+   * How many results a search returns per category. 0 means no limit. Unset falls back to the server default.
+   */
+  searchResultLimit: number | null;
 }
 
 export interface myUserPreferences {

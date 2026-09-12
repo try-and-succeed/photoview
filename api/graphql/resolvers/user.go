@@ -259,20 +259,24 @@ func (r *mutationResolver) ChangeUserPreferences(ctx context.Context, language *
 		return nil, auth.ErrUnauthorized
 	}
 
-	var langTrans *models.LanguageTranslation = nil
-	if language != nil {
-		lng := models.LanguageTranslation(*language)
-		langTrans = &lng
-	}
-
 	var userPref models.UserPreferences
 	if err := db.Where("user_id = ?", user.ID).FirstOrInit(&userPref).Error; err != nil {
 		return nil, err
 	}
 
+	// An omitted argument leaves that preference alone. Assigning every field
+	// on every call would mean a caller changing one setting silently resets
+	// the others - and a client has no reason to know about settings it isn't
+	// touching. An empty language string still clears the language, which
+	// BeforeSave turns back into nil.
 	userPref.UserID = user.ID
-	userPref.Language = langTrans
-	userPref.SearchResultLimit = searchResultLimit
+	if language != nil {
+		lng := models.LanguageTranslation(*language)
+		userPref.Language = &lng
+	}
+	if searchResultLimit != nil {
+		userPref.SearchResultLimit = searchResultLimit
+	}
 
 	if err := db.Save(&userPref).Error; err != nil {
 		return nil, err

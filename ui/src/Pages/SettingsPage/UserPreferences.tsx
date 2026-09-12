@@ -1,11 +1,11 @@
 import { useMutation, useQuery } from '@apollo/client'
 import gql from 'graphql-tag'
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import styled from 'styled-components'
 import { LanguageTranslation } from '../../__generated__/globalTypes'
 import Dropdown from '../../primitives/form/Dropdown'
-import { Button } from '../../primitives/form/Input'
+import { Button, TextField } from '../../primitives/form/Input'
 import {
   InputLabelDescription,
   InputLabelTitle,
@@ -59,10 +59,14 @@ const themePreferences = (t: TranslationFn) => [
 ]
 
 const CHANGE_USER_PREFERENCES = gql`
-  mutation changeUserPreferences($language: String) {
-    changeUserPreferences(language: $language) {
+  mutation changeUserPreferences($language: String, $searchResultLimit: Int) {
+    changeUserPreferences(
+      language: $language
+      searchResultLimit: $searchResultLimit
+    ) {
       id
       language
+      searchResultLimit
     }
   }
 `
@@ -72,6 +76,7 @@ const MY_USER_PREFERENCES = gql`
     myUserPreferences {
       id
       language
+      searchResultLimit
     }
   }
 `
@@ -115,6 +120,35 @@ const UserPreferences = () => {
     () => [...languagePreferences].sort((a, b) => a.label.localeCompare(b.label)),
     []
   )
+
+  const savedSearchLimit = data?.myUserPreferences.searchResultLimit
+  const [searchLimitInput, setSearchLimitInput] = useState('')
+
+  useEffect(() => {
+    setSearchLimitInput(
+      savedSearchLimit == null ? '' : String(savedSearchLimit)
+    )
+  }, [savedSearchLimit])
+
+  const commitSearchLimit = () => {
+    const trimmed = searchLimitInput.trim()
+    // An empty field means "whatever the server does by default", which is
+    // also the state of a user who never touched this - so there is nothing
+    // to save.
+    if (trimmed === '') return
+
+    const parsed = Number(trimmed)
+    if (!Number.isInteger(parsed) || parsed < 0) {
+      setSearchLimitInput(
+        savedSearchLimit == null ? '' : String(savedSearchLimit)
+      )
+      return
+    }
+
+    if (parsed === savedSearchLimit) return
+
+    changePrefs({ variables: { searchResultLimit: parsed } })
+  }
 
   if (error) {
     return <div>{error.message}</div>
@@ -173,6 +207,32 @@ const UserPreferences = () => {
         items={themePreferences(t)}
         setSelected={changeStateTheme}
         selected={theme}
+      />
+      <label htmlFor="user_pref_search_result_limit_field">
+        <InputLabelTitle>
+          {t(
+            'settings.user_preferences.search_result_limit.label',
+            'Search results'
+          )}
+        </InputLabelTitle>
+        <InputLabelDescription>
+          {t(
+            'settings.user_preferences.search_result_limit.description',
+            'How many albums and how many media files a search returns. Enter 0 to show every match.'
+          )}
+        </InputLabelDescription>
+      </label>
+      <TextField
+        id="user_pref_search_result_limit_field"
+        type="number"
+        min={0}
+        step={1}
+        placeholder="10"
+        value={searchLimitInput}
+        disabled={loadingPrefs}
+        onChange={e => setSearchLimitInput(e.target.value)}
+        onBlur={commitSearchLimit}
+        action={commitSearchLimit}
       />
     </UserPreferencesWrapper>
   )
