@@ -99,6 +99,13 @@ func TestFindAlbumsForUserKeepsAlbumsWhenDiscoveryFails(t *testing.T) {
 	assert.NoError(t, os.Chmod(unreadablePath, 0o000))
 	t.Cleanup(func() { os.Chmod(unreadablePath, 0o755) })
 
+	// Permissions don't apply to a root-capable process, which is how tests
+	// often run in a container - there the scan would succeed and there would
+	// be no incomplete discovery to assert about.
+	if _, err := os.ReadDir(unreadablePath); err == nil {
+		t.Skip("this process can read a 0o000 directory, so discovery cannot fail here")
+	}
+
 	_, scanErrors := scanner.FindAlbumsForUser(db, user, scanner_cache.MakeAlbumCache())
 	assert.NotEmpty(t, scanErrors, "the unreadable directory should be reported")
 

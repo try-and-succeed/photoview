@@ -110,9 +110,14 @@ func TestScannerQueueJobOnQueue(t *testing.T) {
 }
 
 func TestScannerQueueGetQueueStatus(t *testing.T) {
+	// A cancelled job winding down beside a restart of the same album: only
+	// the live one belongs in the status.
+	cancelledJob := makeScannerJob(100)
+	cancelledJob.cancel()
+
 	mockScannerQueue := ScannerQueue{
 		idle_chan:   make(chan bool, 1),
-		in_progress: []ScannerJob{makeScannerJob(100)},
+		in_progress: []ScannerJob{cancelledJob, makeScannerJob(100)},
 		up_next:     []ScannerJob{makeScannerJob(20), makeScannerJob(42)},
 		db:          nil,
 	}

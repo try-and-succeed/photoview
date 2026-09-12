@@ -324,6 +324,15 @@ func (queue *ScannerQueue) GetQueueStatus() []models.ScannerQueueItem {
 
 	items := make([]models.ScannerQueueItem, 0, len(queue.in_progress)+len(queue.up_next))
 	for _, job := range queue.in_progress {
+		// A cancelled job sits here until it finishes its current file, and a
+		// restart for the same album may already be running beside it.
+		// Listing both would show the album twice and leave it ambiguous
+		// which row a cancel refers to - and the dead one is on its way out
+		// regardless, so there is nothing to say about it.
+		if job.ctx.Err() != nil {
+			continue
+		}
+
 		items = append(items, models.ScannerQueueItem{
 			Album:  job.ctx.GetAlbum(),
 			Status: models.ScannerJobStatusRunning,
