@@ -106,6 +106,9 @@ const LogoutButton = () => {
   )
 }
 
+// The largest value GraphQL's Int can carry.
+const MAX_SEARCH_RESULT_LIMIT = 2147483647
+
 const UserPreferencesWrapper = styled.div`
   margin-bottom: 24px;
 `
@@ -119,7 +122,8 @@ const UserPreferences = () => {
     setTheme(value)
   }
 
-  const { data } = useQuery<myUserPreferences>(MY_USER_PREFERENCES)
+  const { data, loading: loadingSavedPrefs } =
+    useQuery<myUserPreferences>(MY_USER_PREFERENCES)
   const { data: usernameData } = useQuery<myUsername>(MY_USERNAME_QUERY)
 
   const [changePrefs, { loading: loadingPrefs, error }] = useMutation<
@@ -136,7 +140,9 @@ const UserPreferences = () => {
   const [searchLimitInput, setSearchLimitInput] = useState('')
 
   const showSavedSearchLimit = () =>
-    setSearchLimitInput(savedSearchLimit == null ? '' : String(savedSearchLimit))
+    setSearchLimitInput(
+      savedSearchLimit == null ? '' : String(savedSearchLimit)
+    )
 
   useEffect(showSavedSearchLimit, [savedSearchLimit])
 
@@ -149,7 +155,15 @@ const UserPreferences = () => {
     // once a limit is saved there is no way back to "whatever the server
     // does by default" - 0 already means unlimited, so the argument has no
     // spare value left to mean "forget my setting".
-    if (trimmed === '' || !Number.isInteger(parsed) || parsed < 0) {
+    //
+    // The upper bound is GraphQL's Int: a larger number is rejected before
+    // the mutation runs, and that error would replace this whole page.
+    if (
+      trimmed === '' ||
+      !Number.isInteger(parsed) ||
+      parsed < 0 ||
+      parsed > MAX_SEARCH_RESULT_LIMIT
+    ) {
       showSavedSearchLimit()
       return
     }
@@ -241,10 +255,13 @@ const UserPreferences = () => {
         id="user_pref_search_result_limit_field"
         type="number"
         min={0}
+        max={MAX_SEARCH_RESULT_LIMIT}
         step={1}
         placeholder="10"
         value={searchLimitInput}
-        disabled={loadingPrefs}
+        // Also while the saved value is still loading: it would otherwise
+        // land in the field and overwrite whatever was typed meanwhile.
+        disabled={loadingPrefs || loadingSavedPrefs}
         onChange={e => setSearchLimitInput(e.target.value)}
         onBlur={commitSearchLimit}
         action={commitSearchLimit}
