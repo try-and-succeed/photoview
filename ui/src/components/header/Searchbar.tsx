@@ -85,7 +85,10 @@ const SearchBar = () => {
   useEffect(() => {
     setExpanded(false)
     setQuery('')
-  }, [location])
+    // The tree reads its filter from the shared context, so clearing only the
+    // input would leave it filtered by a search the field no longer shows.
+    setTreeQuery('')
+  }, [location, setTreeQuery])
 
   const [selectedItem, setSelectedItem] = useState<number | null>(null)
 
