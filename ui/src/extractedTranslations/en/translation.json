@@ -177,7 +177,7 @@
         "placeholder": "Select language"
       },
       "search_result_limit": {
-        "description": "How many albums and how many media files a search returns. Enter 0 to show every match.",
+        "description": "How many albums and how many media files a search returns. Enter 0 to show every match, or leave it empty to use the default.",
         "label": "Search results"
       },
       "theme": {

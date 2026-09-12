@@ -275,7 +275,15 @@ func (r *mutationResolver) ChangeUserPreferences(ctx context.Context, language *
 		userPref.Language = &lng
 	}
 	if searchResultLimit != nil {
-		userPref.SearchResultLimit = searchResultLimit
+		// Zero already means "no limit", so it cannot also mean "forget my
+		// setting". A negative value is the way back to the server default -
+		// there is no other reading for it, since the search layer would treat
+		// it as unlimited anyway.
+		if *searchResultLimit < 0 {
+			userPref.SearchResultLimit = nil
+		} else {
+			userPref.SearchResultLimit = searchResultLimit
+		}
 	}
 
 	if err := db.Save(&userPref).Error; err != nil {

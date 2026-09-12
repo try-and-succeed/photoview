@@ -101,6 +101,11 @@ extend type Mutation {
   "Change user preferences for the logged in user"
   changeUserPreferences(
     language: String
+    """
+    How many results a search returns per category. 0 means no limit, and any
+    negative value clears the preference so the server default applies again.
+    Omitting it leaves the current setting alone.
+    """
     searchResultLimit: Int
   ): UserPreferences! @isAuthorized
 }

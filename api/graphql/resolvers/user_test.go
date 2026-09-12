@@ -51,6 +51,25 @@ func TestChangeUserPreferencesSearchResultLimit(t *testing.T) {
 		}
 	})
 
+	t.Run("a negative value clears the preference", func(t *testing.T) {
+		limit := 25
+		_, err := r.ChangeUserPreferences(ctx, nil, &limit)
+		assert.NoError(t, err)
+
+		// 0 already means unlimited, so it cannot also mean "forget my
+		// setting" - without this there would be no way back to the default.
+		clear := -1
+		prefs, err := r.ChangeUserPreferences(ctx, nil, &clear)
+		assert.NoError(t, err)
+		if assert.NotNil(t, prefs) {
+			assert.Nil(t, prefs.SearchResultLimit)
+		}
+
+		var stored models.UserPreferences
+		assert.NoError(t, db.Where("user_id = ?", user.ID).First(&stored).Error)
+		assert.Nil(t, stored.SearchResultLimit)
+	})
+
 	t.Run("changing one preference leaves the others alone", func(t *testing.T) {
 		limit := 40
 		_, err := r.ChangeUserPreferences(ctx, nil, &limit)
