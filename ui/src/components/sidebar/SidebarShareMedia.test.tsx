@@ -65,9 +65,10 @@ afterEach(() => {
   })
 })
 
-const setup = (canShareFiles: boolean) => {
-  const share = refuseUntilSecondAttempt()
-
+const renderWithShare = (
+  share: ReturnType<typeof vi.fn>,
+  canShareFiles: boolean
+) => {
   Object.defineProperty(global, 'navigator', {
     value: {
       ...originalNavigator,
@@ -82,6 +83,9 @@ const setup = (canShareFiles: boolean) => {
 
   return share
 }
+
+const setup = (canShareFiles: boolean) =>
+  renderWithShare(refuseUntilSecondAttempt(), canShareFiles)
 
 test('a refused file share can be retried without downloading again', async () => {
   const share = setup(true)
@@ -120,4 +124,31 @@ test('a refused link fallback can be retried too', async () => {
   await userEvent.click(retryButton)
   await waitFor(() => expect(share).toHaveBeenCalledTimes(2))
   expect(downloads).toBe(1)
+})
+
+test('a failed download still shares the link', async () => {
+  global.fetch = vi.fn(() => {
+    downloads += 1
+
+    return Promise.reject(new Error('the network went away'))
+  }) as unknown as typeof fetch
+
+  const share = renderWithShare(
+    vi.fn(() => Promise.resolve()),
+    true
+  )
+
+  await userEvent.click(screen.getByRole('button'))
+  await waitFor(() => expect(share).toHaveBeenCalledTimes(1))
+  expect(downloads).toBe(1)
+
+  // No file could be prepared, but the link is still shareable - ending in
+  // nothing would be the one outcome worse than sharing less.
+  const payload = share.mock.calls[0][0] as Record<string, unknown>
+  expect(payload).not.toHaveProperty('files')
+  expect(payload.url).toBe(location.href)
+
+  // Nothing was held back, so the button is not asking for a second tap that
+  // would only fail the same way.
+  expect(screen.getByRole('button')).not.toHaveAccessibleName(/again/i)
 })
