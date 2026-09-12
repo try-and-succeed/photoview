@@ -127,6 +127,13 @@ func ScanAlbum(ctx scanner_task.TaskContext) error {
 		}
 	}
 
+	// The after-scan tasks include deleting every media row that this scan did
+	// not see. A cancelled scan has not seen everything, so running them here
+	// would delete media that is still on disk.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	if err := scanner_tasks.Tasks.AfterScanAlbum(ctx, changedMedia, albumMedia); err != nil {
 		return errors.Wrap(err, "after scan album")
 	}

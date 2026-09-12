@@ -255,3 +255,56 @@ func TestScannerQueueCancelAllJobs(t *testing.T) {
 		}
 	})
 }
+
+func TestScannerQueueOneLiveJobPerAlbum(t *testing.T) {
+	t.Run("a running job keeps a second job for the same album off the queue", func(t *testing.T) {
+		mockScannerQueue := ScannerQueue{
+			idle_chan:   make(chan bool, 1),
+			in_progress: []ScannerJob{makeScannerJob(100)},
+			up_next:     make([]ScannerJob, 0),
+			db:          nil,
+		}
+
+		duplicate := makeScannerJob(100)
+		if err := mockScannerQueue.addJob(&duplicate); err != nil {
+			t.Fatalf("addJob returned an error: %v", err)
+		}
+
+		// Without this, a queued and a running job would share an album and
+		// there would be no telling which one a cancel refers to.
+		if len(mockScannerQueue.up_next) != 0 {
+			t.Errorf("Expected the duplicate to be rejected, up_next: %+v", mockScannerQueue.up_next)
+		}
+	})
+
+	t.Run("a cancelled running job does not block a restart", func(t *testing.T) {
+		cancelledJob := makeScannerJob(100)
+		cancelledJob.cancel()
+
+		mockScannerQueue := ScannerQueue{
+			idle_chan:   make(chan bool, 1),
+			in_progress: []ScannerJob{cancelledJob},
+			up_next:     make([]ScannerJob, 0),
+			db:          nil,
+		}
+
+		restart := makeScannerJob(100)
+		if err := mockScannerQueue.addJob(&restart); err != nil {
+			t.Fatalf("addJob returned an error: %v", err)
+		}
+
+		if len(mockScannerQueue.up_next) != 1 {
+			t.Fatalf("Expected the restart to be queued, up_next: %+v", mockScannerQueue.up_next)
+		}
+
+		// The album is listed once, not twice: the dead job is on its way out
+		// and has nothing left to report.
+		status := mockScannerQueue.GetQueueStatus()
+		if len(status) != 1 {
+			t.Fatalf("Expected one item for the album, got %+v", status)
+		}
+		if status[0].Status != models.ScannerJobStatusQueued {
+			t.Errorf("Expected the live restart to be the one listed, got %v", status[0].Status)
+		}
+	})
+}

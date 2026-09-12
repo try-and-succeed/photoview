@@ -66,10 +66,6 @@ func CleanupMedia(db *gorm.DB, albumId int, albumMedia []*models.Media) []error 
 
 // DeleteOldUserAlbums finds and deletes old albums in the database and cache that does not exist on the filesystem anymore.
 func DeleteOldUserAlbums(db *gorm.DB, scannedAlbums []*models.Album, user *models.User) []error {
-	if len(scannedAlbums) == 0 {
-		return nil
-	}
-
 	scannedAlbumIDs := make([]interface{}, len(scannedAlbums))
 	for i, album := range scannedAlbums {
 		scannedAlbumIDs[i] = album.ID
@@ -83,8 +79,15 @@ func DeleteOldUserAlbums(db *gorm.DB, scannedAlbums []*models.Album, user *model
 		Select("albums.*").
 		Table("user_albums").
 		Joins("JOIN albums ON user_albums.album_id = albums.id").
-		Where("user_id = ?", user.ID).
-		Where("album_id NOT IN (?)", scannedAlbumIDs)
+		Where("user_id = ?", user.ID)
+
+	// An empty result means the walk completed and found nothing left on disk -
+	// every album the user has is stale. Callers only reach this after a
+	// complete discovery, so there is nothing to be careful about; the NOT IN
+	// is simply left off, since an empty list is not valid SQL everywhere.
+	if len(scannedAlbumIDs) > 0 {
+		query = query.Where("album_id NOT IN (?)", scannedAlbumIDs)
+	}
 
 	if err := query.Find(&deleteAlbums).Error; err != nil {
 		return []error{errors.Wrap(err, "get albums to be deleted from database")}
