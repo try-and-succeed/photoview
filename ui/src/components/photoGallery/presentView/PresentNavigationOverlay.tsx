@@ -47,11 +47,18 @@ const OverlayButton = styled.button`
     transition: stroke 300ms;
   }
 
-  /* An invisible button must not stay tappable: on touch devices the first
-     tap is meant to reveal the controls via the container's click handler,
-     not to fire whatever button happens to sit under the finger. */
+  /* An invisible button must not stay usable: on touch devices the first tap
+     is meant to reveal the controls via the container's click handler, not to
+     fire whatever button happens to sit under the finger - and a keyboard
+     user must not be able to tab to a control they cannot see, which
+     pointer-events alone would still allow. visibility also takes them out
+     of the accessibility tree. The delay lets the stroke finish fading out
+     first; revealing them again is instant, since no transition applies in
+     that direction. */
   &.hide {
     pointer-events: none;
+    visibility: hidden;
+    transition: visibility 0s 300ms;
   }
 `
 

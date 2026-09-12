@@ -107,11 +107,20 @@ func AlbumPath(db *gorm.DB, user *models.User, album *models.Album) ([]*models.A
 	// depth is carried through the recursion and used only to ORDER BY - a
 	// recursive CTE gives no ordering guarantee otherwise, and the
 	// truncation below depends on seeing the closest ancestor first.
+	//
+	// It also bounds the recursion. Without depth, UNION alone ended a cyclic
+	// parent chain by deduplicating the repeated rows; with it every lap
+	// produces a distinct row, so a cycle would run until the database gives
+	// up. Nothing creates such a cycle today - parents come from the
+	// directory tree - but the query shouldn't be the thing that turns a bad
+	// row into a hang. No real album tree is anywhere near this deep.
 	if err := db.Raw(`
 		WITH recursive path_albums AS (
 			SELECT *, 0 AS depth FROM albums anchor WHERE anchor.id = ?
 			UNION
-			SELECT parent.*, child.depth + 1 FROM path_albums child JOIN albums parent ON parent.id = child.parent_album_id
+			SELECT parent.*, child.depth + 1 FROM path_albums child
+				JOIN albums parent ON parent.id = child.parent_album_id
+				WHERE child.depth < 64
 		)
 		SELECT * FROM path_albums WHERE id != ? ORDER BY depth ASC
 	`, album.ID, album.ID).Scan(&albumPath).Error; err != nil {
@@ -125,6 +134,7 @@ func AlbumPath(db *gorm.DB, user *models.User, album *models.Album) ([]*models.A
 	// would throw away the whole breadcrumb as soon as the top of the tree
 	// happens to be someone else's.
 	visibleUpTo := len(albumPath)
+
 	for i, ancestor := range albumPath {
 		owns, err := user.OwnsAlbum(db, ancestor)
 		if err != nil {
@@ -133,6 +143,7 @@ func AlbumPath(db *gorm.DB, user *models.User, album *models.Album) ([]*models.A
 
 		if !owns {
 			visibleUpTo = i
+
 			break
 		}
 	}

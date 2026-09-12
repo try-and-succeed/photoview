@@ -330,8 +330,24 @@ const SidebarShareMediaButton = ({
 
       await navigator.share({ files: [file], title: media.title ?? undefined })
     } catch (err) {
-      if ((err as Error)?.name !== 'AbortError') {
-        console.error('Native share failed', err)
+      if ((err as Error)?.name === 'AbortError') {
+        return
+      }
+
+      console.error('Native share failed', err)
+
+      // The file couldn't be prepared or the sheet refused it, but the link
+      // is still shareable, so try that rather than ending in nothing. It
+      // may itself fail: a slow download can outlast the user activation
+      // that the share sheet needs, and this attempt does not bring it
+      // back. Nothing can, short of downloading before the user asks or
+      // making them tap twice, and neither is worth it for the common case.
+      try {
+        await shareLink()
+      } catch (fallbackErr) {
+        if ((fallbackErr as Error)?.name !== 'AbortError') {
+          console.error('Link share failed too', fallbackErr)
+        }
       }
     } finally {
       setSharing(false)

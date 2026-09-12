@@ -1,4 +1,4 @@
-import React, { forwardRef, useState } from 'react'
+import React, { forwardRef, useEffect, useState } from 'react'
 import classNames, { Argument as ClassNamesArg } from 'classnames'
 import { ReactComponent as ActionArrowIcon } from './icons/textboxActionArrow.svg'
 import { ReactComponent as LoadingSpinnerIcon } from './icons/textboxLoadingSpinner.svg'
@@ -40,6 +40,14 @@ export const TextField = forwardRef(
     const isPassword = type === 'password'
     const [revealed, setRevealed] = useState(false)
     const effectiveType = isPassword && revealed ? 'text' : type
+
+    // A field that stops being a password one and later becomes one again
+    // would otherwise come back revealed, showing the secret unasked.
+    useEffect(() => {
+      if (!isPassword) {
+        setRevealed(false)
+      }
+    }, [isPassword])
 
     let variant = 'bg-white border-gray-200 focus:border-blue-400'
     if (error)

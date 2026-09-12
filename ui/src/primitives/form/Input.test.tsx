@@ -28,6 +28,23 @@ test('a field of any other type gets no reveal button', () => {
   expect(screen.queryByRole('button', { name: 'Show password' })).toBeNull()
 })
 
+test('a field that stops being a password comes back hidden', async () => {
+  const { rerender } = render(
+    <TextField type="password" defaultValue="hunter2" />
+  )
+
+  await userEvent.click(screen.getByRole('button', { name: 'Show password' }))
+  expect(screen.getByDisplayValue('hunter2')).toHaveAttribute('type', 'text')
+
+  rerender(<TextField type="text" defaultValue="hunter2" />)
+  rerender(<TextField type="password" defaultValue="hunter2" />)
+
+  expect(
+    screen.getByDisplayValue('hunter2'),
+    'the secret must not reappear unasked'
+  ).toHaveAttribute('type', 'password')
+})
+
 test('the reveal button sits next to the action button without replacing it', async () => {
   const action = vi.fn()
   render(<TextField type="password" defaultValue="hunter2" action={action} />)
