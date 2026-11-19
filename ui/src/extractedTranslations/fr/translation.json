@@ -287,6 +287,11 @@
       "title_placeholder": "Titre de l'Album"
     },
     "download": {
+      "actions": {
+        "download": "",
+        "send": "",
+        "send_again": ""
+      },
       "filesize": {
         "byte_one": "{{count}} Octet",
         "byte_many": "",
@@ -308,7 +313,8 @@
         "dimensions": "Dimensions",
         "file_size": "Taille",
         "file_type": "Type",
-        "name": "Nom"
+        "name": "Nom",
+        "send": ""
       },
       "title": "Télécharger"
     },

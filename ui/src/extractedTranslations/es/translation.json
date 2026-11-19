@@ -287,6 +287,11 @@
       "title_placeholder": ""
     },
     "download": {
+      "actions": {
+        "download": "",
+        "send": "",
+        "send_again": ""
+      },
       "filesize": {
         "byte_one": "",
         "byte_many": "",
@@ -308,7 +313,8 @@
         "dimensions": "Dimensiones",
         "file_size": "Tamaño",
         "file_type": "Tipo",
-        "name": "Nombre"
+        "name": "Nombre",
+        "send": ""
       },
       "title": "Descargar"
     },
