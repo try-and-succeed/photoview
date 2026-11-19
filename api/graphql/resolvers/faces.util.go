@@ -95,23 +95,52 @@ func getUserOwnedImageFaces(tx *gorm.DB, user *models.User, imageFaceIDs []int) 
 	return userOwnedImageFaces, nil
 }
 
-func hasDuplicateMediaInFaceGroupsUnion(db *gorm.DB, faceGroupIDs ...int) (bool, error) {
+// imageFacesToDetachOnMerge returns the faces of the source groups that a merge
+// into destFaceGroupID cannot take along, because the destination would then
+// hold two faces of the same photo - and a photo shows a person only once. Per
+// photo the destination keeps the face it already has, or else the source face
+// that was detected first; the others on that photo are returned.
+func imageFacesToDetachOnMerge(db *gorm.DB, destFaceGroupID int, sourceFaceGroupIDs []int) ([]int, error) {
+	faceGroupIDs := append([]int{destFaceGroupID}, sourceFaceGroupIDs...)
 
-	duplicateMediaQuery := db.
+	// Only photos that end up with more than one face are of interest, so a
+	// merge of large groups does not load every face they hold.
+	sharedMediaQuery := db.
 		Table("image_faces").
 		Select("media_id").
 		Where("face_group_id IN ?", faceGroupIDs).
 		Group("media_id").
 		Having("COUNT(*) > 1")
 
-	var count int64
+	var faces []models.ImageFace
 	if err := db.
-		Table("(?) AS duplicate_media", duplicateMediaQuery).
-		Count(&count).Error; err != nil {
-		return false, err
+		Select("id", "face_group_id", "media_id").
+		Where("face_group_id IN ? AND media_id IN (?)", faceGroupIDs, sharedMediaQuery).
+		Order("id").
+		Find(&faces).Error; err != nil {
+		return nil, err
 	}
 
-	return count > 0, nil
+	keptMedia := make(map[int]bool)
+	for _, face := range faces {
+		if face.FaceGroupID == destFaceGroupID {
+			keptMedia[face.MediaID] = true
+		}
+	}
+
+	detach := make([]int, 0)
+	for _, face := range faces {
+		if face.FaceGroupID == destFaceGroupID {
+			continue
+		}
+		if keptMedia[face.MediaID] {
+			detach = append(detach, face.ID)
+			continue
+		}
+		keptMedia[face.MediaID] = true
+	}
+
+	return detach, nil
 }
 
 func doesFaceGroupContainImages(db *gorm.DB, faceGroupID int, imageFaceIDs []int) (bool, error) {

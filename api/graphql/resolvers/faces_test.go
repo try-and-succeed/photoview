@@ -122,6 +122,44 @@ func recordFaceDetector(t *testing.T) *recordingFaceDetector {
 	return recorder
 }
 
+func faceGroupOf(t *testing.T, r *mutationResolver, imageFaceID int) int {
+	t.Helper()
+
+	var face models.ImageFace
+	if err := r.database.First(&face, imageFaceID).Error; err != nil {
+		t.Fatalf("image face %d: %v", imageFaceID, err)
+	}
+
+	return face.FaceGroupID
+}
+
+func assertFaceGroupMembers(t *testing.T, r *mutationResolver, faceGroupID int, want []int) {
+	t.Helper()
+
+	var got []int
+	if err := r.database.Model(&models.ImageFace{}).
+		Where("face_group_id = ?", faceGroupID).
+		Order("id").
+		Pluck("id", &got).Error; err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("expected face group %d to hold faces %v, got %v", faceGroupID, want, got)
+	}
+}
+
+func assertFaceGroupDeleted(t *testing.T, r *mutationResolver, faceGroupID int) {
+	t.Helper()
+
+	var count int64
+	if err := r.database.Model(&models.FaceGroup{}).Where("id = ?", faceGroupID).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("expected face group %d to be deleted", faceGroupID)
+	}
+}
+
 func TestCombineFaceGroups(t *testing.T) {
 	t.Run("merges face groups when media does not overlap", func(t *testing.T) {
 		r, ctx, _ := setupFaceMutationTest(t)
@@ -155,9 +193,10 @@ func TestCombineFaceGroups(t *testing.T) {
 		}
 	})
 
-	t.Run("rejects merge when destination and source contain the same media", func(t *testing.T) {
+	t.Run("detaches a source face on a photo the destination already shows", func(t *testing.T) {
 		r, ctx, _ := setupFaceMutationTest(t)
 		createFaceMutationFixtures(t, r)
+		recorder := recordFaceDetector(t)
 
 		testDataList := []models.ImageFace{
 			{Model: models.Model{ID: 1}, FaceGroupID: 1, MediaID: 1},
@@ -170,26 +209,29 @@ func TestCombineFaceGroups(t *testing.T) {
 		}
 
 		result, err := r.CombineFaceGroups(ctx, 1, []int{2})
-		if err == nil {
-			t.Fatal("expected CombineFaceGroups to reject duplicate media, got nil error")
+		if err != nil {
+			t.Fatal("CombineFaceGroups failed:", err)
 		}
-		if result != nil {
-			t.Fatalf("expected nil result when merge is rejected, got %#v", result)
-		}
-		if !strings.Contains(err.Error(), "duplicate images") {
-			t.Fatalf("expected duplicate image validation error, got: %v", err)
+		if result == nil || result.ID != 1 {
+			t.Fatalf("expected destination face group 1, got %#v", result)
 		}
 
-		var sourceCount int64
-		if err := r.database.Model(&models.ImageFace{}).Where("face_group_id = ?", 2).Count(&sourceCount).Error; err != nil {
-			t.Fatal(err)
+		// The destination keeps its own face on photo 2; the source's face
+		// there is someone else and gets a group of its own, not deleted.
+		assertFaceGroupMembers(t, r, 1, []int{1, 2, 4})
+		detachedGroup := faceGroupOf(t, r, 3)
+		if detachedGroup == 1 || detachedGroup == 2 {
+			t.Fatalf("expected face 3 in a new group, got group %d", detachedGroup)
 		}
-		if sourceCount != 2 {
-			t.Fatalf("expected source group image faces to remain unchanged, got %d", sourceCount)
+		assertFaceGroupMembers(t, r, detachedGroup, []int{3})
+		assertFaceGroupDeleted(t, r, 2)
+
+		if fmt.Sprint(recorder.mergedImageFaces[int32(detachedGroup)]) != "[3]" {
+			t.Fatalf("expected the recognizer to move face 3 to group %d, got %v", detachedGroup, recorder.mergedImageFaces)
 		}
 	})
 
-	t.Run("rejects merge when multiple sources contain the same media", func(t *testing.T) {
+	t.Run("keeps one face per photo across several sources", func(t *testing.T) {
 		r, ctx, _ := setupFaceMutationTest(t)
 		createFaceMutationFixtures(t, r)
 
@@ -202,15 +244,54 @@ func TestCombineFaceGroups(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		result, err := r.CombineFaceGroups(ctx, 1, []int{2, 3})
-		if err == nil {
-			t.Fatal("expected CombineFaceGroups to reject duplicate media across sources, got nil error")
+		if _, err := r.CombineFaceGroups(ctx, 1, []int{2, 3}); err != nil {
+			t.Fatal("CombineFaceGroups failed:", err)
 		}
-		if result != nil {
-			t.Fatalf("expected nil result when merge is rejected, got %#v", result)
+
+		// Neither face on photo 2 was in the destination, so the one detected
+		// first comes along.
+		assertFaceGroupMembers(t, r, 1, []int{1, 2})
+		assertFaceGroupMembers(t, r, faceGroupOf(t, r, 3), []int{3})
+		assertFaceGroupDeleted(t, r, 2)
+		assertFaceGroupDeleted(t, r, 3)
+	})
+
+	t.Run("gives every surplus face on a group photo its own group", func(t *testing.T) {
+		r, ctx, _ := setupFaceMutationTest(t)
+		createFaceMutationFixtures(t, r)
+
+		// The case that prompted this: the smaller group holds three faces of
+		// one group photo, so at least two of them are other people.
+		testDataList := []models.ImageFace{
+			{Model: models.Model{ID: 1}, FaceGroupID: 1, MediaID: 1},
+			{Model: models.Model{ID: 2}, FaceGroupID: 2, MediaID: 2},
+			{Model: models.Model{ID: 3}, FaceGroupID: 2, MediaID: 2},
+			{Model: models.Model{ID: 4}, FaceGroupID: 2, MediaID: 2},
+			{Model: models.Model{ID: 5}, FaceGroupID: 2, MediaID: 3},
 		}
-		if !strings.Contains(err.Error(), "duplicate images") {
-			t.Fatalf("expected duplicate image validation error, got: %v", err)
+		if err := r.database.Create(&testDataList).Error; err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := r.CombineFaceGroups(ctx, 1, []int{2}); err != nil {
+			t.Fatal("CombineFaceGroups failed:", err)
+		}
+
+		assertFaceGroupMembers(t, r, 1, []int{1, 2, 5})
+		// Separate groups: the two may well be two different people.
+		group3, group4 := faceGroupOf(t, r, 3), faceGroupOf(t, r, 4)
+		if group3 == group4 {
+			t.Fatalf("expected faces 3 and 4 in separate groups, both are in %d", group3)
+		}
+		assertFaceGroupMembers(t, r, group3, []int{3})
+		assertFaceGroupMembers(t, r, group4, []int{4})
+
+		var total int64
+		if err := r.database.Model(&models.ImageFace{}).Count(&total).Error; err != nil {
+			t.Fatal(err)
+		}
+		if total != 5 {
+			t.Fatalf("expected no face to be deleted, %d of 5 left", total)
 		}
 	})
 
