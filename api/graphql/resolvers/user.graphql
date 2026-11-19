@@ -37,6 +37,8 @@ type UserPreferences {
   language: LanguageTranslation
   "How many results a search returns per category. 0 means as many as the server allows (currently 1000). Unset falls back to the server default."
   searchResultLimit: Int
+  "Whether to show the album tree next to the gallery. Off unless the user turns it on."
+  showAlbumTree: Boolean
 }
 
 type AuthorizeResult {
@@ -108,5 +110,6 @@ extend type Mutation {
     current setting alone.
     """
     searchResultLimit: Int
+    showAlbumTree: Boolean
   ): UserPreferences! @isAuthorized
 }

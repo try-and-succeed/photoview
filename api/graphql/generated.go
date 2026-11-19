@@ -61,6 +61,11 @@ type ComplexityRoot struct {
 		Title       func(childComplexity int) int
 	}
 
+	AlbumTreeChildren struct {
+		AlbumID  func(childComplexity int) int
+		Children func(childComplexity int) int
+	}
+
 	AuthorizeResult struct {
 		Status  func(childComplexity int) int
 		Success func(childComplexity int) int
@@ -143,7 +148,7 @@ type ComplexityRoot struct {
 
 	Mutation struct {
 		AuthorizeUser               func(childComplexity int, username string, password string) int
-		ChangeUserPreferences       func(childComplexity int, language *string, searchResultLimit *int) int
+		ChangeUserPreferences       func(childComplexity int, language *string, searchResultLimit *int, showAlbumTree *bool) int
 		CombineFaceGroups           func(childComplexity int, destinationFaceGroupID int, sourceFaceGroupIDs []int) int
 		CreateUser                  func(childComplexity int, username string, password *string, admin bool, rootPath *string) int
 		DeleteShareToken            func(childComplexity int, token string) int
@@ -183,6 +188,7 @@ type ComplexityRoot struct {
 
 	Query struct {
 		Album                      func(childComplexity int, id int, tokenCredentials *models.ShareTokenCredentials) int
+		AlbumTreeChildren          func(childComplexity int, albumIds []int) int
 		FaceGroup                  func(childComplexity int, id int) int
 		MapboxToken                func(childComplexity int) int
 		Media                      func(childComplexity int, id int, tokenCredentials *models.ShareTokenCredentials) int
@@ -255,6 +261,7 @@ type ComplexityRoot struct {
 		ID                func(childComplexity int) int
 		Language          func(childComplexity int) int
 		SearchResultLimit func(childComplexity int) int
+		ShowAlbumTree     func(childComplexity int) int
 	}
 
 	VideoMetadata struct {
@@ -334,11 +341,12 @@ type MutationResolver interface {
 	DeleteUser(ctx context.Context, id int) (*models.User, error)
 	UserAddRootPath(ctx context.Context, id int, rootPath string) (*models.Album, error)
 	UserRemoveRootAlbum(ctx context.Context, userID int, albumID int) (*models.Album, error)
-	ChangeUserPreferences(ctx context.Context, language *string, searchResultLimit *int) (*models.UserPreferences, error)
+	ChangeUserPreferences(ctx context.Context, language *string, searchResultLimit *int, showAlbumTree *bool) (*models.UserPreferences, error)
 }
 type QueryResolver interface {
 	MyAlbums(ctx context.Context, order *models.Ordering, paginate *models.Pagination, onlyRoot *bool, showEmpty *bool, onlyWithFavorites *bool) ([]*models.Album, error)
 	Album(ctx context.Context, id int, tokenCredentials *models.ShareTokenCredentials) (*models.Album, error)
+	AlbumTreeChildren(ctx context.Context, albumIds []int) ([]*models.AlbumTreeChildren, error)
 	MyFaceGroups(ctx context.Context, paginate *models.Pagination) ([]*models.FaceGroup, error)
 	FaceGroup(ctx context.Context, id int) (*models.FaceGroup, error)
 	MyMedia(ctx context.Context, order *models.Ordering, paginate *models.Pagination) ([]*models.Media, error)
@@ -459,6 +467,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Album.Title(childComplexity), true
+
+	case "AlbumTreeChildren.albumId":
+		if e.ComplexityRoot.AlbumTreeChildren.AlbumID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AlbumTreeChildren.AlbumID(childComplexity), true
+	case "AlbumTreeChildren.children":
+		if e.ComplexityRoot.AlbumTreeChildren.Children == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AlbumTreeChildren.Children(childComplexity), true
 
 	case "AuthorizeResult.status":
 		if e.ComplexityRoot.AuthorizeResult.Status == nil {
@@ -813,7 +834,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.ChangeUserPreferences(childComplexity, args["language"].(*string), args["searchResultLimit"].(*int)), true
+		return e.ComplexityRoot.Mutation.ChangeUserPreferences(childComplexity, args["language"].(*string), args["searchResultLimit"].(*int), args["showAlbumTree"].(*bool)), true
 	case "Mutation.combineFaceGroups":
 		if e.ComplexityRoot.Mutation.CombineFaceGroups == nil {
 			break
@@ -1129,6 +1150,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Album(childComplexity, args["id"].(int), args["tokenCredentials"].(*models.ShareTokenCredentials)), true
+	case "Query.albumTreeChildren":
+		if e.ComplexityRoot.Query.AlbumTreeChildren == nil {
+			break
+		}
+
+		args, err := ec.field_Query_albumTreeChildren_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AlbumTreeChildren(childComplexity, args["albumIds"].([]int)), true
 	case "Query.faceGroup":
 		if e.ComplexityRoot.Query.FaceGroup == nil {
 			break
@@ -1481,6 +1513,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.UserPreferences.SearchResultLimit(childComplexity), true
+	case "UserPreferences.showAlbumTree":
+		if e.ComplexityRoot.UserPreferences.ShowAlbumTree == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UserPreferences.ShowAlbumTree(childComplexity), true
 
 	case "VideoMetadata.audio":
 		if e.ComplexityRoot.VideoMetadata.Audio == nil {
@@ -1702,6 +1740,16 @@ func (ec *executionContext) childFields_Album(ctx context.Context, field graphql
 		return ec.fieldContext_Album_shares(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Album", field.Name)
+}
+
+func (ec *executionContext) childFields_AlbumTreeChildren(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "albumId":
+		return ec.fieldContext_AlbumTreeChildren_albumId(ctx, field)
+	case "children":
+		return ec.fieldContext_AlbumTreeChildren_children(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AlbumTreeChildren", field.Name)
 }
 
 func (ec *executionContext) childFields_AuthorizeResult(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -1972,6 +2020,8 @@ func (ec *executionContext) childFields_UserPreferences(ctx context.Context, fie
 		return ec.fieldContext_UserPreferences_language(ctx, field)
 	case "searchResultLimit":
 		return ec.fieldContext_UserPreferences_searchResultLimit(ctx, field)
+	case "showAlbumTree":
+		return ec.fieldContext_UserPreferences_showAlbumTree(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type UserPreferences", field.Name)
 }
@@ -2225,6 +2275,14 @@ func (ec *executionContext) field_Mutation_changeUserPreferences_args(ctx contex
 		return nil, err
 	}
 	args["searchResultLimit"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "showAlbumTree",
+		func(ctx context.Context, v any) (*bool, error) {
+			return ec.unmarshalOBoolean2ᚖbool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["showAlbumTree"] = arg2
 	return args, nil
 }
 
@@ -2731,6 +2789,20 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 		return nil, err
 	}
 	args["name"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_albumTreeChildren_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "albumIds",
+		func(ctx context.Context, v any) ([]int, error) {
+			return ec.unmarshalNID2ᚕintᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["albumIds"] = arg0
 	return args, nil
 }
 
@@ -3384,6 +3456,61 @@ func (ec *executionContext) fieldContext_Album_shares(_ context.Context, field g
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_ShareToken(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AlbumTreeChildren_albumId(ctx context.Context, field graphql.CollectedField, obj *models.AlbumTreeChildren) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AlbumTreeChildren_albumId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AlbumID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNID2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AlbumTreeChildren_albumId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AlbumTreeChildren", field, false, false, "ID")
+}
+
+func (ec *executionContext) _AlbumTreeChildren_children(ctx context.Context, field graphql.CollectedField, obj *models.AlbumTreeChildren) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AlbumTreeChildren_children(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Children, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*models.Album) graphql.Marshaler {
+			return ec.marshalNAlbum2ᚕᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐAlbumᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AlbumTreeChildren_children(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AlbumTreeChildren",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Album(ctx, field)
 		},
 	}
 	return fc, nil
@@ -6149,7 +6276,7 @@ func (ec *executionContext) _Mutation_changeUserPreferences(ctx context.Context,
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().ChangeUserPreferences(ctx, fc.Args["language"].(*string), fc.Args["searchResultLimit"].(*int))
+			return ec.Resolvers.Mutation().ChangeUserPreferences(ctx, fc.Args["language"].(*string), fc.Args["searchResultLimit"].(*int), fc.Args["showAlbumTree"].(*bool))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -6475,6 +6602,63 @@ func (ec *executionContext) fieldContext_Query_album(ctx context.Context, field 
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_album_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_albumTreeChildren(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_albumTreeChildren(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AlbumTreeChildren(ctx, fc.Args["albumIds"].([]int))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				if ec.Directives.IsAuthorized == nil {
+					var zeroVal []*models.AlbumTreeChildren
+					return zeroVal, errors.New("directive isAuthorized is not implemented")
+				}
+				return ec.Directives.IsAuthorized(ctx, nil, directive0)
+			}
+
+			next = directive1
+			return next
+		},
+		func(ctx context.Context, selections ast.SelectionSet, v []*models.AlbumTreeChildren) graphql.Marshaler {
+			return ec.marshalNAlbumTreeChildren2ᚕᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐAlbumTreeChildrenᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_albumTreeChildren(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AlbumTreeChildren(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_albumTreeChildren_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -8121,6 +8305,29 @@ func (ec *executionContext) fieldContext_UserPreferences_searchResultLimit(_ con
 	return graphql.NewScalarFieldContext("UserPreferences", field, false, false, "Int")
 }
 
+func (ec *executionContext) _UserPreferences_showAlbumTree(ctx context.Context, field graphql.CollectedField, obj *models.UserPreferences) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_UserPreferences_showAlbumTree(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ShowAlbumTree, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *bool) graphql.Marshaler {
+			return ec.marshalOBoolean2ᚖbool(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_UserPreferences_showAlbumTree(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("UserPreferences", field, false, false, "Boolean")
+}
+
 func (ec *executionContext) _VideoMetadata_id(ctx context.Context, field graphql.CollectedField, obj *models.VideoMetadata) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -9672,6 +9879,44 @@ func (ec *executionContext) _Album(ctx context.Context, sel ast.SelectionSet, ob
 	return out
 }
 
+var albumTreeChildrenImplementors = []string{"AlbumTreeChildren"}
+
+func (ec *executionContext) _AlbumTreeChildren(ctx context.Context, sel ast.SelectionSet, obj *models.AlbumTreeChildren) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, albumTreeChildrenImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AlbumTreeChildren")
+		case "albumId":
+			out.Values[i] = ec._AlbumTreeChildren_albumId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "children":
+			out.Values[i] = ec._AlbumTreeChildren_children(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var authorizeResultImplementors = []string{"AuthorizeResult"}
 
 func (ec *executionContext) _AuthorizeResult(ctx context.Context, sel ast.SelectionSet, obj *models.AuthorizeResult) graphql.Marshaler {
@@ -10520,6 +10765,12 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Query_album(ctx, field)
 				})
+		case "albumTreeChildren":
+			out.ResolveRootConcurrently(innerCtx, ec.OperationContext, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Query_albumTreeChildren(ctx, field)
+				})
 		case "myFaceGroups":
 			out.ResolveRootConcurrently(innerCtx, ec.OperationContext, i,
 				true, true,
@@ -10997,6 +11248,11 @@ func (ec *executionContext) _UserPreferences(ctx context.Context, sel ast.Select
 			}
 		case "searchResultLimit":
 			out.Values[i] = ec._UserPreferences_searchResultLimit(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "showAlbumTree":
+			out.Values[i] = ec._UserPreferences_showAlbumTree(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
@@ -11479,6 +11735,30 @@ func (ec *executionContext) marshalNAlbum2ᚖgithubᚗcomᚋphotoviewᚋphotovie
 		return graphql.Null
 	}
 	return ec._Album(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAlbumTreeChildren2ᚕᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐAlbumTreeChildrenᚄ(ctx context.Context, sel ast.SelectionSet, v []*models.AlbumTreeChildren) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAlbumTreeChildren2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐAlbumTreeChildren(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAlbumTreeChildren2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐAlbumTreeChildren(ctx context.Context, sel ast.SelectionSet, v *models.AlbumTreeChildren) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "AlbumTreeChildren!")
+		return graphql.Null
+	}
+	return ec._AlbumTreeChildren(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNAny2interface(ctx context.Context, v any) (any, error) {

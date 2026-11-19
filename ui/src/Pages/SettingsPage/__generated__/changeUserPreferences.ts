@@ -17,6 +17,10 @@ export interface changeUserPreferences_changeUserPreferences {
    * How many results a search returns per category. 0 means as many as the server allows (currently 1000). Unset falls back to the server default.
    */
   searchResultLimit: number | null;
+  /**
+   * Whether to show the album tree next to the gallery. Off unless the user turns it on.
+   */
+  showAlbumTree: boolean | null;
 }
 
 export interface changeUserPreferences {
@@ -29,4 +33,5 @@ export interface changeUserPreferences {
 export interface changeUserPreferencesVariables {
   language?: string | null;
   searchResultLimit?: number | null;
+  showAlbumTree?: boolean | null;
 }

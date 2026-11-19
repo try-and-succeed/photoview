@@ -1,14 +1,15 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { InMemoryCache } from '@apollo/client'
 import { MockedProvider } from '@apollo/client/testing'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom'
 import * as authentication from '../../helpers/authentication'
 import SearchBar, {
   SEARCH_QUERY,
   SEARCHBAR_USER_PREFERENCES_QUERY,
 } from './Searchbar'
+import { AlbumTreeSearchContext } from '../albumTree/AlbumTreeSearchContext'
 
 vi.mock('../../helpers/authentication.ts')
 
@@ -209,3 +210,50 @@ test('keeps the thumbnails for a short result list', async () => {
     timeout: 15000,
   })
 }, 20000)
+
+const NavigateButton = () => {
+  const navigate = useNavigate()
+
+  return <button onClick={() => navigate('/album/1')}>go</button>
+}
+
+// Mirrors AlbumTreeSearchProvider, but exposes the current query so the test
+// can assert on what the tree would be filtering by.
+const TreeHarness = () => {
+  const [query, setQuery] = useState('')
+
+  return (
+    <MockedProvider
+      mocks={[]}
+      cache={new InMemoryCache({ addTypename: false })}
+    >
+      <MemoryRouter initialEntries={['/']}>
+        <AlbumTreeSearchContext.Provider value={{ query, setQuery }}>
+          <SearchBar />
+          <NavigateButton />
+          <Routes>
+            <Route
+              path="*"
+              element={<span data-testid="tree-query">{query}</span>}
+            />
+          </Routes>
+        </AlbumTreeSearchContext.Provider>
+      </MemoryRouter>
+    </MockedProvider>
+  )
+}
+
+test('the album tree stays filtered by what the search field shows', async () => {
+  render(<TreeHarness />)
+
+  await userEvent.type(screen.getByRole('searchbox'), 'ausflug')
+  expect(screen.getByTestId('tree-query')).toHaveTextContent('ausflug')
+
+  await userEvent.click(screen.getByRole('button', { name: 'go' }))
+
+  // Navigating keeps the typed query in the field, so the tree has to keep
+  // filtering by it too - a tree filtered by something else, or by nothing,
+  // would not match what the field shows.
+  expect(screen.getByRole('searchbox')).toHaveValue('ausflug')
+  expect(screen.getByTestId('tree-query')).toHaveTextContent('ausflug')
+})

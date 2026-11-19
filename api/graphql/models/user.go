@@ -48,6 +48,10 @@ type UserPreferences struct {
 	// SearchResultLimit caps how many media and how many albums a search
 	// returns. 0 means no limit; nil leaves the server default in place.
 	SearchResultLimit *int
+	// ShowAlbumTree controls whether the navigation tree is shown beside the
+	// gallery. nil means "not chosen", which the UI treats as off: the tree is
+	// opt-in.
+	ShowAlbumTree *bool
 }
 
 func (u *UserPreferences) BeforeSave(tx *gorm.DB) error {

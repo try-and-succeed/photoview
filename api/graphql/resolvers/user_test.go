@@ -20,7 +20,7 @@ func TestChangeUserPreferencesSearchResultLimit(t *testing.T) {
 	ctx := auth.AddUserToContext(context.Background(), user)
 
 	t.Run("an unset limit leaves the server default in place", func(t *testing.T) {
-		prefs, err := r.ChangeUserPreferences(ctx, nil, nil)
+		prefs, err := r.ChangeUserPreferences(ctx, nil, nil, nil)
 		assert.NoError(t, err)
 		if assert.NotNil(t, prefs) {
 			assert.Nil(t, prefs.SearchResultLimit)
@@ -29,7 +29,7 @@ func TestChangeUserPreferencesSearchResultLimit(t *testing.T) {
 
 	t.Run("a limit is stored and read back", func(t *testing.T) {
 		limit := 25
-		prefs, err := r.ChangeUserPreferences(ctx, nil, &limit)
+		prefs, err := r.ChangeUserPreferences(ctx, nil, &limit, nil)
 		assert.NoError(t, err)
 		if assert.NotNil(t, prefs.SearchResultLimit) {
 			assert.Equal(t, 25, *prefs.SearchResultLimit)
@@ -44,7 +44,7 @@ func TestChangeUserPreferencesSearchResultLimit(t *testing.T) {
 
 	t.Run("zero is kept as a value, not treated as unset", func(t *testing.T) {
 		unlimited := 0
-		prefs, err := r.ChangeUserPreferences(ctx, nil, &unlimited)
+		prefs, err := r.ChangeUserPreferences(ctx, nil, &unlimited, nil)
 		assert.NoError(t, err)
 		if assert.NotNil(t, prefs.SearchResultLimit, "0 means unlimited and must survive the round trip") {
 			assert.Equal(t, 0, *prefs.SearchResultLimit)
@@ -53,13 +53,13 @@ func TestChangeUserPreferencesSearchResultLimit(t *testing.T) {
 
 	t.Run("a negative value clears the preference", func(t *testing.T) {
 		limit := 25
-		_, err := r.ChangeUserPreferences(ctx, nil, &limit)
+		_, err := r.ChangeUserPreferences(ctx, nil, &limit, nil)
 		assert.NoError(t, err)
 
 		// 0 already means unlimited, so it cannot also mean "forget my
 		// setting" - without this there would be no way back to the default.
 		clear := -1
-		prefs, err := r.ChangeUserPreferences(ctx, nil, &clear)
+		prefs, err := r.ChangeUserPreferences(ctx, nil, &clear, nil)
 		assert.NoError(t, err)
 		if assert.NotNil(t, prefs) {
 			assert.Nil(t, prefs.SearchResultLimit)
@@ -72,11 +72,11 @@ func TestChangeUserPreferencesSearchResultLimit(t *testing.T) {
 
 	t.Run("changing one preference leaves the others alone", func(t *testing.T) {
 		limit := 40
-		_, err := r.ChangeUserPreferences(ctx, nil, &limit)
+		_, err := r.ChangeUserPreferences(ctx, nil, &limit, nil)
 		assert.NoError(t, err)
 
 		language := string(models.LanguageTranslationGerman)
-		prefs, err := r.ChangeUserPreferences(ctx, &language, nil)
+		prefs, err := r.ChangeUserPreferences(ctx, &language, nil, nil)
 		assert.NoError(t, err)
 		if !assert.NotNil(t, prefs) {
 			return
@@ -87,6 +87,32 @@ func TestChangeUserPreferencesSearchResultLimit(t *testing.T) {
 		}
 		if assert.NotNil(t, prefs.Language) {
 			assert.Equal(t, models.LanguageTranslationGerman, *prefs.Language)
+		}
+	})
+	t.Run("the search limit and the album tree do not reset each other", func(t *testing.T) {
+		limit := 15
+		_, err := r.ChangeUserPreferences(ctx, nil, &limit, nil)
+		assert.NoError(t, err)
+
+		show := true
+		prefs, err := r.ChangeUserPreferences(ctx, nil, nil, &show)
+		assert.NoError(t, err)
+		if !assert.NotNil(t, prefs) {
+			return
+		}
+
+		if assert.NotNil(t, prefs.SearchResultLimit, "turning on the tree must not reset the search limit") {
+			assert.Equal(t, 15, *prefs.SearchResultLimit)
+		}
+		if assert.NotNil(t, prefs.ShowAlbumTree) {
+			assert.True(t, *prefs.ShowAlbumTree)
+		}
+
+		limit = 30
+		prefs, err = r.ChangeUserPreferences(ctx, nil, &limit, nil)
+		assert.NoError(t, err)
+		if assert.NotNil(t, prefs.ShowAlbumTree, "changing the search limit must not reset the tree") {
+			assert.True(t, *prefs.ShowAlbumTree)
 		}
 	})
 }
