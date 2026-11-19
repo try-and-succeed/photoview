@@ -178,15 +178,20 @@ func (r *mutationResolver) CombineFaceGroups(ctx context.Context, destinationFac
 		sourceFaceGroups = append(sourceFaceGroups, sourceFaceGroup)
 	}
 
+	// Image face ID -> the new face group it was detached into.
+	detachedFaces := make(map[int]int)
+
 	// Perform the merge
 	updateError := db.Transaction(func(tx *gorm.DB) error {
-		faceGroupIDs := append([]int{destinationFaceGroup.ID}, sourceFaceGroupIDs...)
-		hasDuplicateMedia, err := hasDuplicateMediaInFaceGroupsUnion(tx, faceGroupIDs...)
+		// When the recognizer split one person into several groups, it often
+		// did so on a group photo, putting some of its faces in each. Refusing
+		// the merge over such a photo blocks merging all the others; deleting
+		// the surplus faces would lose people who really are on that photo.
+		// Each of them moves to a group of its own instead, the same as a
+		// detached face, where it can be named or merged later.
+		detach, err := imageFacesToDetachOnMerge(tx, destinationFaceGroup.ID, sourceFaceGroupIDs)
 		if err != nil {
 			return err
-		}
-		if hasDuplicateMedia {
-			return errors.New("cannot merge face groups because the destination would contain duplicate images")
 		}
 
 		if err := tx.
@@ -196,22 +201,27 @@ func (r *mutationResolver) CombineFaceGroups(ctx context.Context, destinationFac
 			return err
 		}
 
+		for _, imageFaceID := range detach {
+			newFaceGroup := models.FaceGroup{}
+			if err := tx.Save(&newFaceGroup).Error; err != nil {
+				return err
+			}
+
+			if err := tx.
+				Model(&models.ImageFace{}).
+				Where("id = ?", imageFaceID).
+				Update("face_group_id", newFaceGroup.ID).Error; err != nil {
+				return err
+			}
+
+			detachedFaces[imageFaceID] = newFaceGroup.ID
+		}
+
 		// delete the source face groups
 		if err := deleteFaceGroups(sourceFaceGroups, tx); err != nil {
 			return err
 		}
-		subQuery := tx.Model(&models.ImageFace{}).
-			Select("MIN(id)").
-			Where("face_group_id = ?", destinationFaceGroup.ID).
-			Group("media_id")
 
-		err = tx.Where("face_group_id = ?", destinationFaceGroup.ID).
-			Where("id NOT IN (?)", subQuery).
-			Delete(&models.ImageFace{}).
-			Error
-		if err != nil {
-			return err
-		}
 		return nil
 	})
 
@@ -224,6 +234,9 @@ func (r *mutationResolver) CombineFaceGroups(ctx context.Context, destinationFac
 	// otherwise new photos keep being matched to groups that no longer exist.
 	for _, sourceID := range sourceFaceGroupIDs {
 		face_detection.GlobalFaceDetector.MergeCategories(int32(sourceID), int32(destinationFaceGroup.ID))
+	}
+	for imageFaceID, faceGroupID := range detachedFaces {
+		face_detection.GlobalFaceDetector.MergeImageFaces([]int{imageFaceID}, int32(faceGroupID))
 	}
 
 	return destinationFaceGroup, nil
