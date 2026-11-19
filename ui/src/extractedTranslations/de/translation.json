@@ -41,7 +41,8 @@
       "result_type": {
         "albums": "Alben",
         "media": ""
-      }
+      },
+      "view_all_results": ""
     }
   },
   "login_page": {
@@ -156,6 +157,15 @@
   "routes": {
     "page_not_found": "Seite nicht gefunden"
   },
+  "search_page": {
+    "albums_heading": "",
+    "error": "",
+    "heading": "",
+    "no_results": "",
+    "title": "",
+    "truncated_one": "",
+    "truncated_other": ""
+  },
   "settings": {
     "concurrent_workers": {
       "description": "Die maximale erlaubte Anzahl an gleichzeitig laufenden Scanner Jobs",
@@ -190,6 +200,10 @@
       "language_selector": {
         "placeholder": "Sprache auswählen"
       },
+      "search_result_limit": {
+        "description": "",
+        "label": ""
+      },
       "theme": {
         "auto": {
           "label": "automatisch"
@@ -203,7 +217,8 @@
         },
         "title": "Darstellung Einstellungen"
       },
-      "title": "Persönliche Einstellungen"
+      "title": "Persönliche Einstellungen",
+      "title_with_username": ""
     },
     "users": {
       "add_user": {

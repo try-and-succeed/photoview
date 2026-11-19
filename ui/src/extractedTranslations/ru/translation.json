@@ -41,7 +41,8 @@
       "result_type": {
         "albums": "Альбомы",
         "media": ""
-      }
+      },
+      "view_all_results": ""
     }
   },
   "login_page": {
@@ -156,6 +157,17 @@
   "routes": {
     "page_not_found": "Страница не найдена"
   },
+  "search_page": {
+    "albums_heading": "",
+    "error": "",
+    "heading": "",
+    "no_results": "",
+    "title": "",
+    "truncated_one": "",
+    "truncated_few": "",
+    "truncated_many": "",
+    "truncated_other": ""
+  },
   "settings": {
     "concurrent_workers": {
       "description": "Максимальное количество задач по сканированию разрешённых работать одновременно",
@@ -190,6 +202,10 @@
       "language_selector": {
         "placeholder": "Выбрать язык"
       },
+      "search_result_limit": {
+        "description": "",
+        "label": ""
+      },
       "theme": {
         "auto": {
           "label": ""
@@ -203,7 +219,8 @@
         },
         "title": ""
       },
-      "title": "Пользовательские настройки"
+      "title": "Пользовательские настройки",
+      "title_with_username": ""
     },
     "users": {
       "add_user": {

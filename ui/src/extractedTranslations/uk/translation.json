@@ -41,7 +41,8 @@
       "result_type": {
         "albums": "Альбоми",
         "media": "Медіафайли"
-      }
+      },
+      "view_all_results": ""
     }
   },
   "login_page": {
@@ -156,6 +157,17 @@
   "routes": {
     "page_not_found": "Сторінку не знайдено"
   },
+  "search_page": {
+    "albums_heading": "",
+    "error": "",
+    "heading": "",
+    "no_results": "",
+    "title": "",
+    "truncated_one": "",
+    "truncated_few": "",
+    "truncated_many": "",
+    "truncated_other": ""
+  },
   "settings": {
     "concurrent_workers": {
       "description": "Максимальна кількість завдань сканування, які можна запускати одночасно",
@@ -190,6 +202,10 @@
       "language_selector": {
         "placeholder": "Обрати мову"
       },
+      "search_result_limit": {
+        "description": "",
+        "label": ""
+      },
       "theme": {
         "auto": {
           "label": "Така-ж, як в системі"
@@ -203,7 +219,8 @@
         },
         "title": "Налаштування теми"
       },
-      "title": "Налаштування користувача"
+      "title": "Налаштування користувача",
+      "title_with_username": ""
     },
     "users": {
       "add_user": {
