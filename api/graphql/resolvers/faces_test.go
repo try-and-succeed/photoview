@@ -240,7 +240,7 @@ func TestCombineFaceGroups(t *testing.T) {
 		}
 	})
 
-	t.Run("keeps one face per photo across several sources", func(t *testing.T) {
+	t.Run("keeps a photo two sources share with one of them", func(t *testing.T) {
 		r, ctx, _ := setupFaceMutationTest(t)
 		createFaceMutationFixtures(t, r)
 
@@ -248,6 +248,7 @@ func TestCombineFaceGroups(t *testing.T) {
 			{Model: models.Model{ID: 1}, FaceGroupID: 1, MediaID: 1},
 			{Model: models.Model{ID: 2}, FaceGroupID: 2, MediaID: 2},
 			{Model: models.Model{ID: 3}, FaceGroupID: 3, MediaID: 2},
+			{Model: models.Model{ID: 4}, FaceGroupID: 2, MediaID: 2},
 		}
 		if err := r.database.Create(&testDataList).Error; err != nil {
 			t.Fatal(err)
@@ -257,20 +258,21 @@ func TestCombineFaceGroups(t *testing.T) {
 			t.Fatal("CombineFaceGroups failed:", err)
 		}
 
-		// Neither face on photo 2 was in the destination, so the one detected
-		// first comes along.
-		assertFaceGroupMembers(t, r, 1, []int{1, 2})
+		// Photo 2 was not in the destination, so the group holding the face
+		// detected first keeps it - with both of its faces there.
+		assertFaceGroupMembers(t, r, 1, []int{1, 2, 4})
 		assertFaceGroupMembers(t, r, faceGroupOf(t, r, 3), []int{3})
 		assertFaceGroupDeleted(t, r, 2)
 		assertFaceGroupDeleted(t, r, 3)
 	})
 
-	t.Run("gives every surplus face on a group photo its own group", func(t *testing.T) {
+	t.Run("takes along several faces a source holds on one photo", func(t *testing.T) {
 		r, ctx, _ := setupFaceMutationTest(t)
 		createFaceMutationFixtures(t, r)
 
-		// The case that prompted this: the smaller group holds three faces of
-		// one group photo, so at least two of them are other people.
+		// The recognizer often files a whole group photo under one person.
+		// Only the destination does not show photo 2, so nothing conflicts
+		// and a merge must not scatter those faces.
 		testDataList := []models.ImageFace{
 			{Model: models.Model{ID: 1}, FaceGroupID: 1, MediaID: 1},
 			{Model: models.Model{ID: 2}, FaceGroupID: 2, MediaID: 2},
@@ -286,14 +288,42 @@ func TestCombineFaceGroups(t *testing.T) {
 			t.Fatal("CombineFaceGroups failed:", err)
 		}
 
-		assertFaceGroupMembers(t, r, 1, []int{1, 2, 5})
-		// Separate groups: the two may well be two different people.
-		group3, group4 := faceGroupOf(t, r, 3), faceGroupOf(t, r, 4)
-		if group3 == group4 {
-			t.Fatalf("expected faces 3 and 4 in separate groups, both are in %d", group3)
+		assertFaceGroupMembers(t, r, 1, []int{1, 2, 3, 4, 5})
+		assertFaceGroupDeleted(t, r, 2)
+	})
+
+	t.Run("gives every source face on a photo the destination shows its own group", func(t *testing.T) {
+		r, ctx, _ := setupFaceMutationTest(t)
+		createFaceMutationFixtures(t, r)
+
+		// The source holds three faces of a group photo the destination
+		// already shows, so all three are someone other than the destination.
+		testDataList := []models.ImageFace{
+			{Model: models.Model{ID: 1}, FaceGroupID: 1, MediaID: 2},
+			{Model: models.Model{ID: 2}, FaceGroupID: 2, MediaID: 2},
+			{Model: models.Model{ID: 3}, FaceGroupID: 2, MediaID: 2},
+			{Model: models.Model{ID: 4}, FaceGroupID: 2, MediaID: 2},
+			{Model: models.Model{ID: 5}, FaceGroupID: 2, MediaID: 3},
 		}
-		assertFaceGroupMembers(t, r, group3, []int{3})
-		assertFaceGroupMembers(t, r, group4, []int{4})
+		if err := r.database.Create(&testDataList).Error; err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := r.CombineFaceGroups(ctx, 1, []int{2}); err != nil {
+			t.Fatal("CombineFaceGroups failed:", err)
+		}
+
+		assertFaceGroupMembers(t, r, 1, []int{1, 5})
+		// Separate groups: they may well be different people.
+		groups := map[int]bool{}
+		for _, faceID := range []int{2, 3, 4} {
+			group := faceGroupOf(t, r, faceID)
+			if group == 1 || groups[group] {
+				t.Fatalf("expected face %d in a new group of its own, got group %d", faceID, group)
+			}
+			groups[group] = true
+			assertFaceGroupMembers(t, r, group, []int{faceID})
+		}
 
 		var total int64
 		if err := r.database.Model(&models.ImageFace{}).Count(&total).Error; err != nil {
