@@ -96,21 +96,27 @@ func getUserOwnedImageFaces(tx *gorm.DB, user *models.User, imageFaceIDs []int) 
 }
 
 // imageFacesToDetachOnMerge returns the faces of the source groups that a merge
-// into destFaceGroupID cannot take along, because the destination would then
-// hold two faces of the same photo - and a photo shows a person only once. Per
-// photo the destination keeps the face it already has, or else the source face
-// that was detected first; the others on that photo are returned.
+// into destFaceGroupID cannot take along, because two of the merged groups
+// show the same photo - and a photo shows a person only once. Per photo the
+// destination keeps what it already has, or else the source group holding the
+// face detected first; the faces the other groups hold on that photo are
+// returned.
+//
+// Several faces one group already holds on one photo stay together: the
+// recognizer often files a whole group photo under one person, and splitting
+// those on merge would scatter thousands of faces of a large group, keeping an
+// arbitrary one per photo.
 func imageFacesToDetachOnMerge(db *gorm.DB, destFaceGroupID int, sourceFaceGroupIDs []int) ([]int, error) {
 	faceGroupIDs := append([]int{destFaceGroupID}, sourceFaceGroupIDs...)
 
-	// Only photos that end up with more than one face are of interest, so a
+	// Only photos that more than one of the groups show are of interest, so a
 	// merge of large groups does not load every face they hold.
 	sharedMediaQuery := db.
 		Table("image_faces").
 		Select("media_id").
 		Where("face_group_id IN ?", faceGroupIDs).
 		Group("media_id").
-		Having("COUNT(*) > 1")
+		Having("COUNT(DISTINCT face_group_id) > 1")
 
 	var faces []models.ImageFace
 	if err := db.
@@ -121,23 +127,24 @@ func imageFacesToDetachOnMerge(db *gorm.DB, destFaceGroupID int, sourceFaceGroup
 		return nil, err
 	}
 
-	keptMedia := make(map[int]bool)
+	// The group each shared photo stays with.
+	mediaOwner := make(map[int]int)
 	for _, face := range faces {
 		if face.FaceGroupID == destFaceGroupID {
-			keptMedia[face.MediaID] = true
+			mediaOwner[face.MediaID] = destFaceGroupID
 		}
 	}
 
 	detach := make([]int, 0)
 	for _, face := range faces {
-		if face.FaceGroupID == destFaceGroupID {
+		owner, claimed := mediaOwner[face.MediaID]
+		if !claimed {
+			mediaOwner[face.MediaID] = face.FaceGroupID
 			continue
 		}
-		if keptMedia[face.MediaID] {
+		if owner != face.FaceGroupID {
 			detach = append(detach, face.ID)
-			continue
 		}
-		keptMedia[face.MediaID] = true
 	}
 
 	return detach, nil
