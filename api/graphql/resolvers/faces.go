@@ -79,8 +79,9 @@ func (r *faceGroupResolver) ImageFaceCount(ctx context.Context, obj *models.Face
 		Where(faceGroupIDIsQuestion, obj.ID).
 		Where("album_id IN (?)", userAlbumIDs)
 
+	// Photos, not faces: a person found twice on one photo still counts once.
 	var count int64
-	if err := query.Count(&count).Error; err != nil {
+	if err := query.Distinct("image_faces.media_id").Count(&count).Error; err != nil {
 		return -1, err
 	}
 
@@ -401,7 +402,10 @@ func (r *queryResolver) MyFaceGroups(ctx context.Context, paginate *models.Pagin
 		Group("image_faces.face_group_id").
 		Group("face_groups.id").
 		Order("CASE WHEN label IS NULL THEN 1 ELSE 0 END").
-		Order("COUNT(image_faces.id) DESC")
+		Order("COUNT(DISTINCT image_faces.media_id) DESC").
+		// A unique last key, or groups with equal counts can repeat or go
+		// missing across pages.
+		Order("face_groups.id")
 
 	faceGroupQuery = models.FormatSQL(faceGroupQuery, nil, paginate)
 
