@@ -28,8 +28,12 @@ type ImageFace {
 }
 
 extend type Query {
-  "Get a list of `FaceGroup`s for the logged in user"
-  myFaceGroups(paginate: Pagination): [FaceGroup!]! @isAuthorized
+  """
+  Get a list of `FaceGroup`s for the logged in user, named before unnamed, then by the
+  number of photos. `countDirection` turns the count round (default DESC); ties are
+  broken by id ascending in either direction, so paging is stable.
+  """
+  myFaceGroups(paginate: Pagination, countDirection: OrderDirection = DESC): [FaceGroup!]! @isAuthorized
 
   "Get a particular `FaceGroup` specified by its ID"
   faceGroup(id: ID!): FaceGroup! @isAuthorized

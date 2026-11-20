@@ -375,7 +375,7 @@ func (r *mutationResolver) DetachImageFaces(ctx context.Context, imageFaceIDs []
 }
 
 // MyFaceGroups is the resolver for the myFaceGroups field.
-func (r *queryResolver) MyFaceGroups(ctx context.Context, paginate *models.Pagination) ([]*models.FaceGroup, error) {
+func (r *queryResolver) MyFaceGroups(ctx context.Context, paginate *models.Pagination, countDirection *models.OrderDirection) ([]*models.FaceGroup, error) {
 	db := r.DB(ctx)
 	user := auth.UserFromContext(ctx)
 	if user == nil {
@@ -395,6 +395,12 @@ func (r *queryResolver) MyFaceGroups(ctx context.Context, paginate *models.Pagin
 		userAlbumIDs[i] = album.ID
 	}
 
+	// Fixed literals only, so no value from the request reaches ORDER BY.
+	countOrder := "COUNT(DISTINCT image_faces.media_id) DESC"
+	if countDirection != nil && *countDirection == models.OrderDirectionAsc {
+		countOrder = "COUNT(DISTINCT image_faces.media_id) ASC"
+	}
+
 	faceGroupQuery := db.
 		Joins("JOIN image_faces ON image_faces.face_group_id = face_groups.id").
 		Where("image_faces.media_id IN (?)",
@@ -402,10 +408,10 @@ func (r *queryResolver) MyFaceGroups(ctx context.Context, paginate *models.Pagin
 		Group("image_faces.face_group_id").
 		Group("face_groups.id").
 		Order("CASE WHEN label IS NULL THEN 1 ELSE 0 END").
-		Order("COUNT(DISTINCT image_faces.media_id) DESC").
-		// A unique last key, or groups with equal counts can repeat or go
-		// missing across pages.
-		Order("face_groups.id")
+		Order(countOrder).
+		// A unique last key, ascending in either direction, or groups with
+		// equal counts can repeat or go missing across pages.
+		Order("face_groups.id ASC")
 
 	faceGroupQuery = models.FormatSQL(faceGroupQuery, nil, paginate)
 

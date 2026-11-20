@@ -188,7 +188,7 @@ type ComplexityRoot struct {
 		Media                      func(childComplexity int, id int, tokenCredentials *models.ShareTokenCredentials) int
 		MediaList                  func(childComplexity int, ids []int) int
 		MyAlbums                   func(childComplexity int, order *models.Ordering, paginate *models.Pagination, onlyRoot *bool, showEmpty *bool, onlyWithFavorites *bool) int
-		MyFaceGroups               func(childComplexity int, paginate *models.Pagination) int
+		MyFaceGroups               func(childComplexity int, paginate *models.Pagination, countDirection *models.OrderDirection) int
 		MyMedia                    func(childComplexity int, order *models.Ordering, paginate *models.Pagination) int
 		MyMediaGeoJSON             func(childComplexity int) int
 		MyTimeline                 func(childComplexity int, paginate *models.Pagination, onlyFavorites *bool, fromDate *time.Time) int
@@ -338,7 +338,7 @@ type MutationResolver interface {
 type QueryResolver interface {
 	MyAlbums(ctx context.Context, order *models.Ordering, paginate *models.Pagination, onlyRoot *bool, showEmpty *bool, onlyWithFavorites *bool) ([]*models.Album, error)
 	Album(ctx context.Context, id int, tokenCredentials *models.ShareTokenCredentials) (*models.Album, error)
-	MyFaceGroups(ctx context.Context, paginate *models.Pagination) ([]*models.FaceGroup, error)
+	MyFaceGroups(ctx context.Context, paginate *models.Pagination, countDirection *models.OrderDirection) ([]*models.FaceGroup, error)
 	FaceGroup(ctx context.Context, id int) (*models.FaceGroup, error)
 	MyMedia(ctx context.Context, order *models.Ordering, paginate *models.Pagination) ([]*models.Media, error)
 	Media(ctx context.Context, id int, tokenCredentials *models.ShareTokenCredentials) (*models.Media, error)
@@ -1189,7 +1189,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.MyFaceGroups(childComplexity, args["paginate"].(*models.Pagination)), true
+		return e.ComplexityRoot.Query.MyFaceGroups(childComplexity, args["paginate"].(*models.Pagination), args["countDirection"].(*models.OrderDirection)), true
 	case "Query.myMedia":
 		if e.ComplexityRoot.Query.MyMedia == nil {
 			break
@@ -2846,6 +2846,14 @@ func (ec *executionContext) field_Query_myFaceGroups_args(ctx context.Context, r
 		return nil, err
 	}
 	args["paginate"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "countDirection",
+		func(ctx context.Context, v any) (*models.OrderDirection, error) {
+			return ec.unmarshalOOrderDirection2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐOrderDirection(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["countDirection"] = arg1
 	return args, nil
 }
 
@@ -6474,7 +6482,7 @@ func (ec *executionContext) _Query_myFaceGroups(ctx context.Context, field graph
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().MyFaceGroups(ctx, fc.Args["paginate"].(*models.Pagination))
+			return ec.Resolvers.Query().MyFaceGroups(ctx, fc.Args["paginate"].(*models.Pagination), fc.Args["countDirection"].(*models.OrderDirection))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
