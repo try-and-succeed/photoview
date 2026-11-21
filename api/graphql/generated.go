@@ -81,6 +81,12 @@ type ComplexityRoot struct {
 		VerifiedFaceCount func(childComplexity int) int
 	}
 
+	FaceReassignment struct {
+		From      func(childComplexity int) int
+		ImageFace func(childComplexity int) int
+		To        func(childComplexity int) int
+	}
+
 	FaceRectangle struct {
 		MaxX func(childComplexity int) int
 		MaxY func(childComplexity int) int
@@ -158,6 +164,7 @@ type ComplexityRoot struct {
 		InitialSetupWizard          func(childComplexity int, username string, password string, rootPath string) int
 		MoveImageFaces              func(childComplexity int, imageFaceIDs []int, destinationFaceGroupID int) int
 		ProtectShareToken           func(childComplexity int, token string, password *string) int
+		ReclassifyFaceGroups        func(childComplexity int, faceGroupIDs []int, dryRun bool, tolerance *float64) int
 		RecognizeUnlabeledFaces     func(childComplexity int) int
 		ResetAlbumCover             func(childComplexity int, albumID int) int
 		ScanAll                     func(childComplexity int) int
@@ -207,6 +214,16 @@ type ComplexityRoot struct {
 		ShareTokenValidatePassword func(childComplexity int, credentials models.ShareTokenCredentials) int
 		SiteInfo                   func(childComplexity int) int
 		User                       func(childComplexity int, order *models.Ordering, paginate *models.Pagination) int
+	}
+
+	ReclassifyResult struct {
+		Changes         func(childComplexity int) int
+		Checked         func(childComplexity int) int
+		Conflicts       func(childComplexity int) int
+		Kept            func(childComplexity int) int
+		Moved           func(childComplexity int) int
+		Unmatched       func(childComplexity int) int
+		VerifiedSamples func(childComplexity int) int
 	}
 
 	ScannerResult struct {
@@ -327,6 +344,7 @@ type MutationResolver interface {
 	DetachImageFaces(ctx context.Context, imageFaceIDs []int) (*models.FaceGroup, error)
 	SetMediaFacesVerified(ctx context.Context, mediaIDs []int, verified bool) ([]*models.ImageFace, error)
 	SetImageFacesVerified(ctx context.Context, imageFaceIDs []int, verified bool) ([]*models.ImageFace, error)
+	ReclassifyFaceGroups(ctx context.Context, faceGroupIDs []int, dryRun bool, tolerance *float64) (*models.ReclassifyResult, error)
 	FavoriteMedia(ctx context.Context, mediaID int, favorite bool) (*models.Media, error)
 	ScanAll(ctx context.Context) (*models.ScannerResult, error)
 	ScanUser(ctx context.Context, userID int) (*models.ScannerResult, error)
@@ -545,6 +563,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.FaceGroup.VerifiedFaceCount(childComplexity), true
+
+	case "FaceReassignment.from":
+		if e.ComplexityRoot.FaceReassignment.From == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FaceReassignment.From(childComplexity), true
+	case "FaceReassignment.imageFace":
+		if e.ComplexityRoot.FaceReassignment.ImageFace == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FaceReassignment.ImageFace(childComplexity), true
+	case "FaceReassignment.to":
+		if e.ComplexityRoot.FaceReassignment.To == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FaceReassignment.To(childComplexity), true
 
 	case "FaceRectangle.maxX":
 		if e.ComplexityRoot.FaceRectangle.MaxX == nil {
@@ -955,6 +992,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ProtectShareToken(childComplexity, args["token"].(string), args["password"].(*string)), true
+	case "Mutation.reclassifyFaceGroups":
+		if e.ComplexityRoot.Mutation.ReclassifyFaceGroups == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_reclassifyFaceGroups_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ReclassifyFaceGroups(childComplexity, args["faceGroupIDs"].([]int), args["dryRun"].(bool), args["tolerance"].(*float64)), true
 	case "Mutation.recognizeUnlabeledFaces":
 		if e.ComplexityRoot.Mutation.RecognizeUnlabeledFaces == nil {
 			break
@@ -1356,6 +1404,49 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.User(childComplexity, args["order"].(*models.Ordering), args["paginate"].(*models.Pagination)), true
+
+	case "ReclassifyResult.changes":
+		if e.ComplexityRoot.ReclassifyResult.Changes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReclassifyResult.Changes(childComplexity), true
+	case "ReclassifyResult.checked":
+		if e.ComplexityRoot.ReclassifyResult.Checked == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReclassifyResult.Checked(childComplexity), true
+	case "ReclassifyResult.conflicts":
+		if e.ComplexityRoot.ReclassifyResult.Conflicts == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReclassifyResult.Conflicts(childComplexity), true
+	case "ReclassifyResult.kept":
+		if e.ComplexityRoot.ReclassifyResult.Kept == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReclassifyResult.Kept(childComplexity), true
+	case "ReclassifyResult.moved":
+		if e.ComplexityRoot.ReclassifyResult.Moved == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReclassifyResult.Moved(childComplexity), true
+	case "ReclassifyResult.unmatched":
+		if e.ComplexityRoot.ReclassifyResult.Unmatched == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReclassifyResult.Unmatched(childComplexity), true
+	case "ReclassifyResult.verifiedSamples":
+		if e.ComplexityRoot.ReclassifyResult.VerifiedSamples == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReclassifyResult.VerifiedSamples(childComplexity), true
 
 	case "ScannerResult.finished":
 		if e.ComplexityRoot.ScannerResult.Finished == nil {
@@ -1814,6 +1905,18 @@ func (ec *executionContext) childFields_FaceGroup(ctx context.Context, field gra
 	return nil, fmt.Errorf("no field named %q was found under type FaceGroup", field.Name)
 }
 
+func (ec *executionContext) childFields_FaceReassignment(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "imageFace":
+		return ec.fieldContext_FaceReassignment_imageFace(ctx, field)
+	case "from":
+		return ec.fieldContext_FaceReassignment_from(ctx, field)
+	case "to":
+		return ec.fieldContext_FaceReassignment_to(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type FaceReassignment", field.Name)
+}
+
 func (ec *executionContext) childFields_FaceRectangle(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "minX":
@@ -1964,6 +2067,26 @@ func (ec *executionContext) childFields_Notification(ctx context.Context, field 
 		return ec.fieldContext_Notification_timeout(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Notification", field.Name)
+}
+
+func (ec *executionContext) childFields_ReclassifyResult(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "checked":
+		return ec.fieldContext_ReclassifyResult_checked(ctx, field)
+	case "kept":
+		return ec.fieldContext_ReclassifyResult_kept(ctx, field)
+	case "moved":
+		return ec.fieldContext_ReclassifyResult_moved(ctx, field)
+	case "unmatched":
+		return ec.fieldContext_ReclassifyResult_unmatched(ctx, field)
+	case "conflicts":
+		return ec.fieldContext_ReclassifyResult_conflicts(ctx, field)
+	case "verifiedSamples":
+		return ec.fieldContext_ReclassifyResult_verifiedSamples(ctx, field)
+	case "changes":
+		return ec.fieldContext_ReclassifyResult_changes(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ReclassifyResult", field.Name)
 }
 
 func (ec *executionContext) childFields_ScannerResult(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -2501,6 +2624,36 @@ func (ec *executionContext) field_Mutation_protectShareToken_args(ctx context.Co
 		return nil, err
 	}
 	args["password"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_reclassifyFaceGroups_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "faceGroupIDs",
+		func(ctx context.Context, v any) ([]int, error) {
+			return ec.unmarshalNID2ᚕintᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["faceGroupIDs"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "dryRun",
+		func(ctx context.Context, v any) (bool, error) {
+			return ec.unmarshalNBoolean2bool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["dryRun"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "tolerance",
+		func(ctx context.Context, v any) (*float64, error) {
+			return ec.unmarshalOFloat2ᚖfloat64(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["tolerance"] = arg2
 	return args, nil
 }
 
@@ -3805,6 +3958,102 @@ func (ec *executionContext) _FaceGroup_reviewFaceCount(ctx context.Context, fiel
 }
 func (ec *executionContext) fieldContext_FaceGroup_reviewFaceCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("FaceGroup", field, true, true, "Int")
+}
+
+func (ec *executionContext) _FaceReassignment_imageFace(ctx context.Context, field graphql.CollectedField, obj *models.FaceReassignment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FaceReassignment_imageFace(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ImageFace, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *models.ImageFace) graphql.Marshaler {
+			return ec.marshalNImageFace2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐImageFace(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FaceReassignment_imageFace(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaceReassignment",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ImageFace(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaceReassignment_from(ctx context.Context, field graphql.CollectedField, obj *models.FaceReassignment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FaceReassignment_from(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.From, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *models.FaceGroup) graphql.Marshaler {
+			return ec.marshalNFaceGroup2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceGroup(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FaceReassignment_from(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaceReassignment",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_FaceGroup(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaceReassignment_to(ctx context.Context, field graphql.CollectedField, obj *models.FaceReassignment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FaceReassignment_to(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.To, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *models.FaceGroup) graphql.Marshaler {
+			return ec.marshalOFaceGroup2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceGroup(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_FaceReassignment_to(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaceReassignment",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_FaceGroup(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _FaceRectangle_minX(ctx context.Context, field graphql.CollectedField, obj *models.FaceRectangle) (ret graphql.Marshaler) {
@@ -5518,6 +5767,63 @@ func (ec *executionContext) fieldContext_Mutation_setImageFacesVerified(ctx cont
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_setImageFacesVerified_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_reclassifyFaceGroups(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_reclassifyFaceGroups(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ReclassifyFaceGroups(ctx, fc.Args["faceGroupIDs"].([]int), fc.Args["dryRun"].(bool), fc.Args["tolerance"].(*float64))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				if ec.Directives.IsAuthorized == nil {
+					var zeroVal *models.ReclassifyResult
+					return zeroVal, errors.New("directive isAuthorized is not implemented")
+				}
+				return ec.Directives.IsAuthorized(ctx, nil, directive0)
+			}
+
+			next = directive1
+			return next
+		},
+		func(ctx context.Context, selections ast.SelectionSet, v *models.ReclassifyResult) graphql.Marshaler {
+			return ec.marshalNReclassifyResult2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐReclassifyResult(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_reclassifyFaceGroups(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ReclassifyResult(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_reclassifyFaceGroups_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -7668,6 +7974,176 @@ func (ec *executionContext) fieldContext_Query___schema(_ context.Context, field
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields___Schema(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ReclassifyResult_checked(ctx context.Context, field graphql.CollectedField, obj *models.ReclassifyResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReclassifyResult_checked(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Checked, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReclassifyResult_checked(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReclassifyResult", field, false, false, "Int")
+}
+
+func (ec *executionContext) _ReclassifyResult_kept(ctx context.Context, field graphql.CollectedField, obj *models.ReclassifyResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReclassifyResult_kept(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kept, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReclassifyResult_kept(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReclassifyResult", field, false, false, "Int")
+}
+
+func (ec *executionContext) _ReclassifyResult_moved(ctx context.Context, field graphql.CollectedField, obj *models.ReclassifyResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReclassifyResult_moved(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Moved, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReclassifyResult_moved(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReclassifyResult", field, false, false, "Int")
+}
+
+func (ec *executionContext) _ReclassifyResult_unmatched(ctx context.Context, field graphql.CollectedField, obj *models.ReclassifyResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReclassifyResult_unmatched(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Unmatched, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReclassifyResult_unmatched(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReclassifyResult", field, false, false, "Int")
+}
+
+func (ec *executionContext) _ReclassifyResult_conflicts(ctx context.Context, field graphql.CollectedField, obj *models.ReclassifyResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReclassifyResult_conflicts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Conflicts, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReclassifyResult_conflicts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReclassifyResult", field, false, false, "Int")
+}
+
+func (ec *executionContext) _ReclassifyResult_verifiedSamples(ctx context.Context, field graphql.CollectedField, obj *models.ReclassifyResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReclassifyResult_verifiedSamples(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.VerifiedSamples, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReclassifyResult_verifiedSamples(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReclassifyResult", field, false, false, "Int")
+}
+
+func (ec *executionContext) _ReclassifyResult_changes(ctx context.Context, field graphql.CollectedField, obj *models.ReclassifyResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReclassifyResult_changes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Changes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*models.FaceReassignment) graphql.Marshaler {
+			return ec.marshalNFaceReassignment2ᚕᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceReassignmentᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReclassifyResult_changes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ReclassifyResult",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_FaceReassignment(ctx, field)
 		},
 	}
 	return fc, nil
@@ -10271,6 +10747,49 @@ func (ec *executionContext) _FaceGroup(ctx context.Context, sel ast.SelectionSet
 	return out
 }
 
+var faceReassignmentImplementors = []string{"FaceReassignment"}
+
+func (ec *executionContext) _FaceReassignment(ctx context.Context, sel ast.SelectionSet, obj *models.FaceReassignment) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, faceReassignmentImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FaceReassignment")
+		case "imageFace":
+			out.Values[i] = ec._FaceReassignment_imageFace(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "from":
+			out.Values[i] = ec._FaceReassignment_from(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "to":
+			out.Values[i] = ec._FaceReassignment_to(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var faceRectangleImplementors = []string{"FaceRectangle"}
 
 func (ec *executionContext) _FaceRectangle(ctx context.Context, sel ast.SelectionSet, obj *models.FaceRectangle) graphql.Marshaler {
@@ -10768,6 +11287,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "reclassifyFaceGroups":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_reclassifyFaceGroups(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "favoriteMedia":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_favoriteMedia(ctx, field)
@@ -11126,6 +11652,69 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			})
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var reclassifyResultImplementors = []string{"ReclassifyResult"}
+
+func (ec *executionContext) _ReclassifyResult(ctx context.Context, sel ast.SelectionSet, obj *models.ReclassifyResult) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, reclassifyResultImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ReclassifyResult")
+		case "checked":
+			out.Values[i] = ec._ReclassifyResult_checked(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kept":
+			out.Values[i] = ec._ReclassifyResult_kept(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "moved":
+			out.Values[i] = ec._ReclassifyResult_moved(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "unmatched":
+			out.Values[i] = ec._ReclassifyResult_unmatched(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "conflicts":
+			out.Values[i] = ec._ReclassifyResult_conflicts(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "verifiedSamples":
+			out.Values[i] = ec._ReclassifyResult_verifiedSamples(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "changes":
+			out.Values[i] = ec._ReclassifyResult_changes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -12053,6 +12642,30 @@ func (ec *executionContext) marshalNFaceGroup2ᚖgithubᚗcomᚋphotoviewᚋphot
 	return ec._FaceGroup(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNFaceReassignment2ᚕᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceReassignmentᚄ(ctx context.Context, sel ast.SelectionSet, v []*models.FaceReassignment) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNFaceReassignment2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceReassignment(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNFaceReassignment2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceReassignment(ctx context.Context, sel ast.SelectionSet, v *models.FaceReassignment) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "FaceReassignment!")
+		return graphql.Null
+	}
+	return ec._FaceReassignment(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNFaceRectangle2githubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceRectangle(ctx context.Context, sel ast.SelectionSet, v models.FaceRectangle) graphql.Marshaler {
 	return ec._FaceRectangle(ctx, sel, &v)
 }
@@ -12253,6 +12866,14 @@ func (ec *executionContext) unmarshalNNotificationType2githubᚗcomᚋphotoview�
 
 func (ec *executionContext) marshalNNotificationType2githubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐNotificationType(ctx context.Context, sel ast.SelectionSet, v models.NotificationType) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNReclassifyResult2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐReclassifyResult(ctx context.Context, sel ast.SelectionSet, v *models.ReclassifyResult) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "ReclassifyResult!")
+		return graphql.Null
+	}
+	return ec._ReclassifyResult(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNScannerResult2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐScannerResult(ctx context.Context, sel ast.SelectionSet, v *models.ScannerResult) graphql.Marshaler {
@@ -12563,6 +13184,13 @@ func (ec *executionContext) marshalOCoordinates2ᚖgithubᚗcomᚋphotoviewᚋph
 		return graphql.Null
 	}
 	return ec._Coordinates(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOFaceGroup2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceGroup(ctx context.Context, sel ast.SelectionSet, v *models.FaceGroup) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._FaceGroup(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOFloat2ᚖfloat64(ctx context.Context, v any) (*float64, error) {

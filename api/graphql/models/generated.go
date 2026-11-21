@@ -25,6 +25,14 @@ type Coordinates struct {
 	Longitude float64 `json:"longitude"`
 }
 
+// One face an automatic run moved, or would move
+type FaceReassignment struct {
+	ImageFace *ImageFace `json:"imageFace"`
+	From      *FaceGroup `json:"from"`
+	// The group it moved to. A face without a match gets a new group of its own, which only exists after a real run, so this is null for those with dryRun
+	To *FaceGroup `json:"to,omitempty"`
+}
+
 // Which faces of a group to list
 type ImageFaceFilter struct {
 	Verified    *bool `json:"verified,omitempty"`
@@ -74,6 +82,24 @@ type Pagination struct {
 }
 
 type Query struct {
+}
+
+// What reclassifyFaceGroups did, or would do with dryRun
+type ReclassifyResult struct {
+	// Unverified faces looked at
+	Checked int `json:"checked"`
+	// Stayed in their group
+	Kept int `json:"kept"`
+	// Moved to another group
+	Moved int `json:"moved"`
+	// No verified face close enough; each got a new group of its own
+	Unmatched int `json:"unmatched"`
+	// Would have moved, but the destination already has a face on that photo
+	Conflicts int `json:"conflicts"`
+	// Verified faces used as reference
+	VerifiedSamples int `json:"verifiedSamples"`
+	// Faces that changed group, or would change with dryRun
+	Changes []*FaceReassignment `json:"changes"`
 }
 
 type ScannerResult struct {

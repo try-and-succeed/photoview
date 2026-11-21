@@ -53,6 +53,32 @@ type ImageFace {
   needsReview: Boolean!
 }
 
+"One face an automatic run moved, or would move"
+type FaceReassignment {
+  imageFace: ImageFace!
+  from: FaceGroup!
+  "The group it moved to. A face without a match gets a new group of its own, which only exists after a real run, so this is null for those with dryRun"
+  to: FaceGroup
+}
+
+"What reclassifyFaceGroups did, or would do with dryRun"
+type ReclassifyResult {
+  "Unverified faces looked at"
+  checked: Int!
+  "Stayed in their group"
+  kept: Int!
+  "Moved to another group"
+  moved: Int!
+  "No verified face close enough; each got a new group of its own"
+  unmatched: Int!
+  "Would have moved, but the destination already has a face on that photo"
+  conflicts: Int!
+  "Verified faces used as reference"
+  verifiedSamples: Int!
+  "Faces that changed group, or would change with dryRun"
+  changes: [FaceReassignment!]!
+}
+
 extend type Query {
   "Get a list of `FaceGroup`s for the logged in user"
   myFaceGroups(paginate: Pagination): [FaceGroup!]! @isAuthorized
@@ -85,4 +111,11 @@ extend type Mutation {
 
   "Mark single faces as confirmed (or not); clears needsReview when confirming"
   setImageFacesVerified(imageFaceIDs: [ID!]!, verified: Boolean!): [ImageFace!]! @isAuthorized
+
+  """
+  Assign the unverified faces of these groups again, using only verified faces as reference.
+  With dryRun nothing is written and the result says what would happen.
+  `tolerance` is compared with the squared distance between faces, as during a scan (default 0.2).
+  """
+  reclassifyFaceGroups(faceGroupIDs: [ID!]!, dryRun: Boolean!, tolerance: Float): ReclassifyResult! @isAuthorized
 }

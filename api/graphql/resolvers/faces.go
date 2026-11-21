@@ -466,6 +466,21 @@ func (r *mutationResolver) SetImageFacesVerified(ctx context.Context, imageFaceI
 	return setUserOwnedImageFacesVerified(db, user, imageFaceIDs, verified)
 }
 
+// ReclassifyFaceGroups is the resolver for the reclassifyFaceGroups field.
+func (r *mutationResolver) ReclassifyFaceGroups(ctx context.Context, faceGroupIDs []int, dryRun bool, tolerance *float64) (*models.ReclassifyResult, error) {
+	db := r.DB(ctx)
+	user := auth.UserFromContext(ctx)
+	if user == nil {
+		return nil, errors.New("unauthorized")
+	}
+
+	if face_detection.GlobalFaceDetector == nil {
+		return nil, ErrFaceDetectorNotInitialized
+	}
+
+	return reclassifyFaceGroups(db, user, faceGroupIDs, dryRun, tolerance)
+}
+
 // MyFaceGroups is the resolver for the myFaceGroups field.
 func (r *queryResolver) MyFaceGroups(ctx context.Context, paginate *models.Pagination) ([]*models.FaceGroup, error) {
 	db := r.DB(ctx)
