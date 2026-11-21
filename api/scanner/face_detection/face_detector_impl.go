@@ -20,6 +20,8 @@ type faceDetector struct {
 	faceDescriptors []face.Descriptor
 	faceGroupIDs    []int32
 	imageFaceIDs    []int
+	// How many samples the recognizer was last given.
+	appliedSamples int
 }
 
 func InitializeFaceDetector(db *gorm.DB) error {
@@ -60,6 +62,7 @@ func InitializeFaceDetector(db *gorm.DB) error {
 // holds fd.mutex.
 func (fd *faceDetector) applySamplesLocked() {
 	fd.rec.SetSamples(fd.faceDescriptors, fd.faceGroupIDs)
+	fd.appliedSamples = len(fd.faceDescriptors)
 }
 
 func getSamplesFromDatabase(db *gorm.DB) (samples []face.Descriptor, faceGroupIDs []int32, imageFaceIDs []int, err error) {
@@ -156,7 +159,7 @@ func (fd *faceDetector) DetectFaces(db *gorm.DB, media *models.Media) error {
 func (fd *faceDetector) classifyDescriptor(descriptor face.Descriptor) int32 {
 	// go-face ignores an empty sample set and keeps the previous one, so the
 	// recognizer cannot be told that there is nothing to match against.
-	if len(fd.faceDescriptors) == 0 {
+	if fd.appliedSamples == 0 {
 		return -1
 	}
 	return int32(fd.rec.ClassifyThreshold(descriptor, 0.2))

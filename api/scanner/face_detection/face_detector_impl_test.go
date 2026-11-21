@@ -211,6 +211,38 @@ func TestRecognizeUnlabeledFacesWithoutLabeledFaces(t *testing.T) {
 	}
 }
 
+func TestRecognizeUnlabeledFacesKeepsUnlabeledApart(t *testing.T) {
+	f := setupDetectorTest(t)
+	// Two similar faces, no labeled face: the first one must not become a
+	// reference that pulls the second into its unlabeled group.
+	firstGroup, secondGroup := f.group(t, nil), f.group(t, nil)
+	f.face(t, firstGroup, 0, descriptorAt(base))
+	second := f.face(t, secondGroup, 1, descriptorAt(base+step))
+	detector := f.initialize(t)
+	detector.primeRecognizer()
+
+	var updated []*models.ImageFace
+	err := f.db.Transaction(func(tx *gorm.DB) error {
+		var err error
+		updated, err = detector.RecognizeUnlabeledFaces(tx, f.user)
+		return err
+	})
+	if err != nil {
+		t.Fatal("RecognizeUnlabeledFaces error:", err)
+	}
+	if len(updated) != 0 {
+		t.Errorf("updated faces = %+v, want none", updated)
+	}
+
+	var stored models.ImageFace
+	if err := f.db.First(&stored, second.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.FaceGroupID != secondGroup.ID {
+		t.Errorf("second face is in group %d, want it to stay in %d", stored.FaceGroupID, secondGroup.ID)
+	}
+}
+
 func TestRecognizeUnlabeledFaces(t *testing.T) {
 	f := setupDetectorTest(t)
 	anna := "Anna"
