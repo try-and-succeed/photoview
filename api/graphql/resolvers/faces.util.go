@@ -1,10 +1,13 @@
 package resolvers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
+	"github.com/photoview/photoview/api/graphql/auth"
 	"github.com/photoview/photoview/api/graphql/models"
+	"github.com/photoview/photoview/api/scanner/face_detection"
 	"gorm.io/gorm"
 )
 
@@ -196,4 +199,83 @@ func deleteFaceGroups(sourceFaceGroups []*models.FaceGroup, tx *gorm.DB) error {
 		}
 	}
 	return nil
+}
+
+// countFaceGroupFaces counts the faces of a group on the user's photos that
+// meet condition, a column compared with true.
+func countFaceGroupFaces(ctx context.Context, db *gorm.DB, obj *models.FaceGroup, condition string) (int, error) {
+	user := auth.UserFromContext(ctx)
+	if user == nil {
+		return -1, errors.New("unauthorized")
+	}
+
+	if face_detection.GlobalFaceDetector == nil {
+		return -1, ErrFaceDetectorNotInitialized
+	}
+
+	if err := user.FillAlbums(db); err != nil {
+		return -1, err
+	}
+
+	userAlbumIDs := make([]int, len(user.Albums))
+	for i, album := range user.Albums {
+		userAlbumIDs[i] = album.ID
+	}
+
+	var count int64
+	if err := db.
+		Model(&models.ImageFace{}).
+		Joins("Media").
+		Where(faceGroupIDIsQuestion, obj.ID).
+		Where("album_id IN (?)", userAlbumIDs).
+		Where(condition, true).
+		Count(&count).Error; err != nil {
+		return -1, err
+	}
+
+	return int(count), nil
+}
+
+// setUserOwnedImageFacesVerified confirms the given faces the user may change,
+// or takes the confirmation back, and returns the faces it changed. IDs the
+// user does not own are skipped.
+func setUserOwnedImageFacesVerified(db *gorm.DB, user *models.User, imageFaceIDs []int, verified bool) ([]*models.ImageFace, error) {
+	if len(imageFaceIDs) == 0 {
+		return []*models.ImageFace{}, nil
+	}
+
+	var changed []*models.ImageFace
+	err := db.Transaction(func(tx *gorm.DB) error {
+		owned, err := getUserOwnedImageFaces(tx, user, imageFaceIDs)
+		if err != nil {
+			return err
+		}
+		if len(owned) == 0 {
+			return nil
+		}
+
+		ownedIDs := make([]int, len(owned))
+		for i, face := range owned {
+			ownedIDs[i] = face.ID
+		}
+
+		updates := map[string]any{"verified": verified}
+		if verified {
+			// A confirmed face has been looked at.
+			updates["needs_review"] = false
+		}
+		if err := tx.Model(&models.ImageFace{}).Where("id IN (?)", ownedIDs).Updates(updates).Error; err != nil {
+			return err
+		}
+
+		return tx.Where("id IN (?)", ownedIDs).Order("id").Find(&changed).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	if changed == nil {
+		changed = []*models.ImageFace{}
+	}
+
+	return changed, nil
 }

@@ -256,6 +256,10 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 	unrecognizedFaceGroupIDs := make([]int32, 0)
 	unrecognizedImageFaceIDs := make([]int, 0)
 
+	asideFaceGroupIDs := make([]int32, 0)
+	asideDescriptors := make([]face.Descriptor, 0)
+	asideImageFaceIDs := make([]int, 0)
+
 	newFaceGroupIDs := make([]int32, 0)
 	newDescriptors := make([]face.Descriptor, 0)
 	newImageFaceIDs := make([]int, 0)
@@ -275,6 +279,16 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 		return nil, err
 	}
 
+	// A face a person confirmed is never moved automatically.
+	var verifiedFaceIDs []int
+	if err := tx.Model(&models.ImageFace{}).Where("verified = ?", true).Pluck("id", &verifiedFaceIDs).Error; err != nil {
+		return nil, err
+	}
+	verified := make(map[int]bool, len(verifiedFaceIDs))
+	for _, id := range verifiedFaceIDs {
+		verified[id] = true
+	}
+
 	fd.mutex.Lock()
 	defer fd.mutex.Unlock()
 
@@ -291,7 +305,12 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 			}
 		}
 
-		if isUnlabeled {
+		if isUnlabeled && verified[imageFaceID] {
+			// Neither moved nor a reference: references are labeled faces.
+			asideFaceGroupIDs = append(asideFaceGroupIDs, faceGroupID)
+			asideDescriptors = append(asideDescriptors, descriptor)
+			asideImageFaceIDs = append(asideImageFaceIDs, imageFaceID)
+		} else if isUnlabeled {
 			unrecognizedFaceGroupIDs = append(unrecognizedFaceGroupIDs, faceGroupID)
 			unrecognizedDescriptors = append(unrecognizedDescriptors, descriptor)
 			unrecognizedImageFaceIDs = append(unrecognizedImageFaceIDs, imageFaceID)
@@ -334,7 +353,12 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 				return nil, err
 			}
 
-			if err := tx.Model(&imageFace).Update("face_group_id", int(match)).Error; err != nil {
+			// Placed by a run, so up for review.
+			if err := tx.Model(&imageFace).Updates(map[string]any{
+				"face_group_id": int(match),
+				"assigned_by":   models.FaceAssignmentReclassify,
+				"needs_review":  true,
+			}).Error; err != nil {
 				return nil, err
 			}
 
@@ -346,6 +370,10 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 			fd.imageFaceIDs = append(fd.imageFaceIDs, imageFaceID)
 		}
 	}
+
+	fd.faceGroupIDs = append(fd.faceGroupIDs, asideFaceGroupIDs...)
+	fd.faceDescriptors = append(fd.faceDescriptors, asideDescriptors...)
+	fd.imageFaceIDs = append(fd.imageFaceIDs, asideImageFaceIDs...)
 
 	// The unlabeled groups whose faces all found their person are empty now.
 	for faceGroupID := range sourceFaceGroupIDs {

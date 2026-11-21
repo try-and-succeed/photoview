@@ -6,14 +6,34 @@ type FaceRectangle {
   maxY: Float!
 }
 
+"How a face got into its current group"
+enum FaceAssignment {
+  "Placed by the face detector during a scan"
+  DETECTOR
+  "Moved or split off by a person"
+  USER
+  "Placed by an automatic re-identification run"
+  RECLASSIFY
+}
+
+"Which faces of a group to list"
+input ImageFaceFilter {
+  verified: Boolean
+  needsReview: Boolean
+}
+
 "A collection of faces of a particular person"
 type FaceGroup {
   id: ID!
   "The name of the person"
   label: String
-  imageFaces(paginate: Pagination): [ImageFace!]!
+  imageFaces(paginate: Pagination, filter: ImageFaceFilter): [ImageFace!]!
   "The total number of images in this collection"
   imageFaceCount: Int!
+  "Faces in this group confirmed by a person"
+  verifiedFaceCount: Int!
+  "Faces in this group waiting for review"
+  reviewFaceCount: Int!
 }
 
 "A single face on a particular image"
@@ -25,6 +45,12 @@ type ImageFace {
   rectangle: FaceRectangle!
   "The `FaceGroup` that contains this `ImageFace`"
   faceGroup: FaceGroup!
+  "Confirmed by a person; never moved automatically"
+  verified: Boolean!
+  "Who put the face into its current group"
+  assignedBy: FaceAssignment!
+  "Placed or checked by an automatic run and not yet reviewed"
+  needsReview: Boolean!
 }
 
 extend type Query {
@@ -37,6 +63,9 @@ extend type Query {
 
   "Get a particular `FaceGroup` specified by its ID"
   faceGroup(id: ID!): FaceGroup! @isAuthorized
+
+  "Photos with at least one face waiting for review, newest first; optionally only those of one group"
+  myMediaNeedingReview(faceGroupID: ID, paginate: Pagination): [Media!]! @isAuthorized
 }
 
 extend type Mutation {
@@ -54,4 +83,10 @@ extend type Mutation {
 
   "Move a list of ImageFaces to a new face group"
   detachImageFaces(imageFaceIDs: [ID!]!): FaceGroup! @isAuthorized
+
+  "Mark all faces on these photos as confirmed (or not); clears needsReview when confirming"
+  setMediaFacesVerified(mediaIDs: [ID!]!, verified: Boolean!): [ImageFace!]! @isAuthorized
+
+  "Mark single faces as confirmed (or not); clears needsReview when confirming"
+  setImageFacesVerified(imageFaceIDs: [ID!]!, verified: Boolean!): [ImageFace!]! @isAuthorized
 }

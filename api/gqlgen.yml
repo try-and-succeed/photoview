@@ -69,6 +69,8 @@ models:
         resolver: true
   FaceRectangle:
     model: github.com/photoview/photoview/api/graphql/models.FaceRectangle
+  FaceAssignment:
+    model: github.com/photoview/photoview/api/graphql/models.FaceAssignment
   SiteInfo:
     model: github.com/photoview/photoview/api/graphql/models.SiteInfo
   MediaType:

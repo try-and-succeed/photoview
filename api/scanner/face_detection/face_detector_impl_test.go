@@ -304,3 +304,88 @@ func TestRecognizeUnlabeledFaces(t *testing.T) {
 		t.Errorf("classify after recognition = %d, want group %d", got, labeled.ID)
 	}
 }
+
+func (f *detectorFixture) verify(t *testing.T, face *models.ImageFace) {
+	t.Helper()
+	if err := f.db.Model(face).Update("verified", true).Error; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func recognizeUnlabeled(t *testing.T, f *detectorFixture, detector *faceDetector) []*models.ImageFace {
+	t.Helper()
+	var updated []*models.ImageFace
+	err := f.db.Transaction(func(tx *gorm.DB) error {
+		var err error
+		updated, err = detector.RecognizeUnlabeledFaces(tx, f.user)
+		return err
+	})
+	if err != nil {
+		t.Fatal("RecognizeUnlabeledFaces error:", err)
+	}
+	return updated
+}
+
+func TestRecognizeUnlabeledFacesRespectsVerification(t *testing.T) {
+	t.Run("leaves a confirmed face alone and flags the faces it moves", func(t *testing.T) {
+		f := setupDetectorTest(t)
+		anna := "Anna"
+		labeled := f.group(t, &anna)
+		f.face(t, labeled, 0, descriptorAt(base))
+
+		confirmedGroup, otherGroup := f.group(t, nil), f.group(t, nil)
+		confirmed := f.face(t, confirmedGroup, 1, descriptorAt(base+step))
+		f.verify(t, confirmed)
+		other := f.face(t, otherGroup, 2, descriptorAt(base-step))
+
+		detector := f.initialize(t)
+		updated := recognizeUnlabeled(t, f, detector)
+
+		if len(updated) != 1 || updated[0].ID != other.ID {
+			t.Fatalf("updated faces = %+v, want only face %d", updated, other.ID)
+		}
+
+		var storedConfirmed, storedOther models.ImageFace
+		if err := f.db.First(&storedConfirmed, confirmed.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := f.db.First(&storedOther, other.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+
+		if storedConfirmed.FaceGroupID != confirmedGroup.ID || storedConfirmed.AssignedBy != models.FaceAssignmentDetector || storedConfirmed.NeedsReview {
+			t.Errorf("confirmed face = group %d, %s, review %v; want untouched in group %d",
+				storedConfirmed.FaceGroupID, storedConfirmed.AssignedBy, storedConfirmed.NeedsReview, confirmedGroup.ID)
+		}
+		if storedOther.FaceGroupID != labeled.ID || storedOther.AssignedBy != models.FaceAssignmentReclassify || !storedOther.NeedsReview {
+			t.Errorf("moved face = group %d, %s, review %v; want group %d, RECLASSIFY, review true",
+				storedOther.FaceGroupID, storedOther.AssignedBy, storedOther.NeedsReview, labeled.ID)
+		}
+	})
+
+	t.Run("a confirmed unlabeled face is no reference", func(t *testing.T) {
+		f := setupDetectorTest(t)
+		confirmedGroup, otherGroup := f.group(t, nil), f.group(t, nil)
+		confirmed := f.face(t, confirmedGroup, 0, descriptorAt(base))
+		f.verify(t, confirmed)
+		other := f.face(t, otherGroup, 1, descriptorAt(base+step))
+
+		detector := f.initialize(t)
+		if updated := recognizeUnlabeled(t, f, detector); len(updated) != 0 {
+			t.Errorf("updated faces = %+v, want none", updated)
+		}
+
+		var stored models.ImageFace
+		if err := f.db.First(&stored, other.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		if stored.FaceGroupID != otherGroup.ID {
+			t.Errorf("face is in group %d, want it to stay in %d", stored.FaceGroupID, otherGroup.ID)
+		}
+
+		// The confirmed face is back among the samples afterwards.
+		if got := detector.classifyForTest(descriptorAt(base)); got != int32(confirmedGroup.ID) {
+			t.Errorf("classify the confirmed face = %d, want group %d", got, confirmedGroup.ID)
+		}
+	})
+}

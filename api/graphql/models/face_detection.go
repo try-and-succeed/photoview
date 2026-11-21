@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
@@ -27,6 +28,52 @@ type ImageFace struct {
 	Media       Media          `gorm:"constraint:OnDelete:CASCADE;"`
 	Descriptor  FaceDescriptor `gorm:"not null"`
 	Rectangle   FaceRectangle  `gorm:"not null"`
+
+	// Confirmed by a person: never moved by an automatic run.
+	Verified bool `gorm:"not null;default:false;index"`
+	// Who put the face into its current group.
+	AssignedBy FaceAssignment `gorm:"type:varchar(16);not null;default:'DETECTOR'"`
+	// Placed or checked by an automatic run and not looked at yet.
+	NeedsReview bool `gorm:"not null;default:false;index"`
+}
+
+// FaceAssignment tells who put a face into its current group. The values are
+// the GraphQL enum's spelling, so it binds directly.
+type FaceAssignment string
+
+const (
+	FaceAssignmentDetector   FaceAssignment = "DETECTOR"
+	FaceAssignmentUser       FaceAssignment = "USER"
+	FaceAssignmentReclassify FaceAssignment = "RECLASSIFY"
+)
+
+func (a FaceAssignment) IsValid() bool {
+	switch a {
+	case FaceAssignmentDetector, FaceAssignmentUser, FaceAssignmentReclassify:
+		return true
+	}
+	return false
+}
+
+func (a FaceAssignment) String() string {
+	return string(a)
+}
+
+func (a *FaceAssignment) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*a = FaceAssignment(str)
+	if !a.IsValid() {
+		return fmt.Errorf("%s is not a valid FaceAssignment", str)
+	}
+	return nil
+}
+
+func (a FaceAssignment) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(a.String()))
 }
 
 func (f *ImageFace) FillMedia(db *gorm.DB) error {
