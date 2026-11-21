@@ -64,7 +64,7 @@ func TestFaceQueriesStayInUserAlbums(t *testing.T) {
 		t.Errorf("ImageFaceCount = %d, want 2 (photo 5 is not the user's)", count)
 	}
 
-	imageFaces, err := groupResolver.ImageFaces(ctx, group1, nil)
+	imageFaces, err := groupResolver.ImageFaces(ctx, group1, nil, nil)
 	if err != nil {
 		t.Fatal("ImageFaces error:", err)
 	}
@@ -77,7 +77,7 @@ func TestFaceQueriesStayInUserAlbums(t *testing.T) {
 		t.Errorf("ImageFaces = %v, want [1 2]", ids)
 	}
 
-	groups, err := queryResolver.MyFaceGroups(ctx, nil)
+	groups, err := queryResolver.MyFaceGroups(ctx, nil, nil)
 	if err != nil {
 		t.Fatal("MyFaceGroups error:", err)
 	}
