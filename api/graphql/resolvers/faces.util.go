@@ -18,6 +18,15 @@ const imageFacesIDInQuestion = "image_faces.id IN (?)"
 
 var ErrFaceDetectorNotInitialized = errors.New("face detector not initialized")
 
+// userAlbumIDsSubquery selects the IDs of the albums the user has access to,
+// for use as `album_id IN (?)`. The database resolves it, so a query neither
+// loads the albums first nor carries one parameter per album; and unlike
+// user.FillAlbums it does not write to the user, which the face group field
+// resolvers of one request share and run concurrently.
+func userAlbumIDsSubquery(db *gorm.DB, user *models.User) *gorm.DB {
+	return db.Table("user_albums").Select("album_id").Where("user_id = ?", user.ID)
+}
+
 func userOwnedFaceGroup(db *gorm.DB, user *models.User, faceGroupID int) (*models.FaceGroup, error) {
 	if user.Admin {
 		var faceGroup models.FaceGroup

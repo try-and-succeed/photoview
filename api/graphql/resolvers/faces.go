@@ -29,14 +29,7 @@ func (r *faceGroupResolver) ImageFaces(ctx context.Context, obj *models.FaceGrou
 		return nil, ErrFaceDetectorNotInitialized
 	}
 
-	if err := user.FillAlbums(db); err != nil {
-		return nil, err
-	}
-
-	userAlbumIDs := make([]int, len(user.Albums))
-	for i, album := range user.Albums {
-		userAlbumIDs[i] = album.ID
-	}
+	userAlbumIDs := userAlbumIDsSubquery(db, user)
 
 	query := db.
 		Joins("Media").
@@ -72,14 +65,7 @@ func (r *faceGroupResolver) ImageFaceCount(ctx context.Context, obj *models.Face
 		return -1, ErrFaceDetectorNotInitialized
 	}
 
-	if err := user.FillAlbums(db); err != nil {
-		return -1, err
-	}
-
-	userAlbumIDs := make([]int, len(user.Albums))
-	for i, album := range user.Albums {
-		userAlbumIDs[i] = album.ID
-	}
+	userAlbumIDs := userAlbumIDsSubquery(db, user)
 
 	query := db.
 		Model(&models.ImageFace{}).
@@ -518,14 +504,7 @@ func (r *queryResolver) MyFaceGroups(ctx context.Context, paginate *models.Pagin
 		return nil, ErrFaceDetectorNotInitialized
 	}
 
-	if err := user.FillAlbums(db); err != nil {
-		return nil, err
-	}
-
-	userAlbumIDs := make([]int, len(user.Albums))
-	for i, album := range user.Albums {
-		userAlbumIDs[i] = album.ID
-	}
+	userAlbumIDs := userAlbumIDsSubquery(db, user)
 
 	// Fixed literals only, so no value from the request reaches ORDER BY.
 	countOrder := "COUNT(DISTINCT image_faces.media_id) DESC"
@@ -567,14 +546,7 @@ func (r *queryResolver) FaceGroup(ctx context.Context, id int) (*models.FaceGrou
 		return nil, ErrFaceDetectorNotInitialized
 	}
 
-	if err := user.FillAlbums(db); err != nil {
-		return nil, err
-	}
-
-	userAlbumIDs := make([]int, len(user.Albums))
-	for i, album := range user.Albums {
-		userAlbumIDs[i] = album.ID
-	}
+	userAlbumIDs := userAlbumIDsSubquery(db, user)
 
 	faceGroupQuery := db.
 		Joins("LEFT JOIN image_faces ON image_faces.face_group_id = face_groups.id").
