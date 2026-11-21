@@ -293,9 +293,14 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 	fd.faceDescriptors = newDescriptors
 	fd.imageFaceIDs = newImageFaceIDs
 
+	// Classify against the labeled faces only, and keep that reference set
+	// for the whole run: a face placed here must not pull in the next one,
+	// or one wrong match chains into many.
 	fd.applySamplesLocked()
+	defer fd.applySamplesLocked()
 
 	updatedImageFaces := make([]*models.ImageFace, 0)
+	sourceFaceGroupIDs := make(map[int32]bool)
 
 	for i := range unrecognizedDescriptors {
 		descriptor := unrecognizedDescriptors[i]
@@ -309,7 +314,6 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 			fd.faceGroupIDs = append(fd.faceGroupIDs, faceGroupID)
 			fd.faceDescriptors = append(fd.faceDescriptors, descriptor)
 			fd.imageFaceIDs = append(fd.imageFaceIDs, imageFaceID)
-			fd.applySamplesLocked()
 		} else {
 			// found new match, update the database
 			var imageFace models.ImageFace
@@ -322,11 +326,22 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 			}
 
 			updatedImageFaces = append(updatedImageFaces, &imageFace)
+			sourceFaceGroupIDs[faceGroupID] = true
 
 			fd.faceGroupIDs = append(fd.faceGroupIDs, match)
 			fd.faceDescriptors = append(fd.faceDescriptors, descriptor)
 			fd.imageFaceIDs = append(fd.imageFaceIDs, imageFaceID)
-			fd.applySamplesLocked()
+		}
+	}
+
+	// The unlabeled groups whose faces all found their person are empty now.
+	for faceGroupID := range sourceFaceGroupIDs {
+		if err := tx.
+			Where("id = ?", faceGroupID).
+			Where("NOT EXISTS (?)", tx.Table("image_faces").Select("1").
+				Where("image_faces.face_group_id = face_groups.id")).
+			Delete(&models.FaceGroup{}).Error; err != nil {
+			return nil, err
 		}
 	}
 

@@ -211,6 +211,38 @@ func TestRecognizeUnlabeledFacesWithoutLabeledFaces(t *testing.T) {
 	}
 }
 
+func TestRecognizeUnlabeledFacesKeepsUnlabeledApart(t *testing.T) {
+	f := setupDetectorTest(t)
+	// Two similar faces, no labeled face: the first one must not become a
+	// reference that pulls the second into its unlabeled group.
+	firstGroup, secondGroup := f.group(t, nil), f.group(t, nil)
+	f.face(t, firstGroup, 0, descriptorAt(base))
+	second := f.face(t, secondGroup, 1, descriptorAt(base+step))
+	detector := f.initialize(t)
+	detector.primeRecognizer()
+
+	var updated []*models.ImageFace
+	err := f.db.Transaction(func(tx *gorm.DB) error {
+		var err error
+		updated, err = detector.RecognizeUnlabeledFaces(tx, f.user)
+		return err
+	})
+	if err != nil {
+		t.Fatal("RecognizeUnlabeledFaces error:", err)
+	}
+	if len(updated) != 0 {
+		t.Errorf("updated faces = %+v, want none", updated)
+	}
+
+	var stored models.ImageFace
+	if err := f.db.First(&stored, second.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.FaceGroupID != secondGroup.ID {
+		t.Errorf("second face is in group %d, want it to stay in %d", stored.FaceGroupID, secondGroup.ID)
+	}
+}
+
 func TestRecognizeUnlabeledFaces(t *testing.T) {
 	f := setupDetectorTest(t)
 	anna := "Anna"
@@ -220,9 +252,10 @@ func TestRecognizeUnlabeledFaces(t *testing.T) {
 	// Close to Anna: moves to her.
 	nearGroup := f.group(t, nil)
 	near := f.face(t, nearGroup, 1, descriptorAt(base+step))
-	// Far from everyone: stays.
-	farGroup := f.group(t, nil)
-	far := f.face(t, farGroup, 2, descriptorAt(-base))
+	// Close only to the near face, not to Anna: references stay fixed for
+	// the whole run, so it must not follow the near face to her.
+	chainedGroup := f.group(t, nil)
+	chained := f.face(t, chainedGroup, 2, descriptorAt(base+2*step))
 
 	detector := f.initialize(t)
 	detector.primeRecognizer()
@@ -251,11 +284,22 @@ func TestRecognizeUnlabeledFaces(t *testing.T) {
 	if got := groupOf(near); got != labeled.ID {
 		t.Errorf("near face is in group %d, want %d", got, labeled.ID)
 	}
-	if got := groupOf(far); got != farGroup.ID {
-		t.Errorf("far face is in group %d, want it to stay in %d", got, farGroup.ID)
+	if got := groupOf(chained); got != chainedGroup.ID {
+		t.Errorf("chained face is in group %d, want it to stay in %d", got, chainedGroup.ID)
+	}
+
+	var count int64
+	if err := f.db.Model(&models.FaceGroup{}).Where("id = ?", nearGroup.ID).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("the emptied unlabeled group %d should be deleted", nearGroup.ID)
 	}
 
 	// The recognizer sees the outcome too.
+	if got := detector.classifyForTest(descriptorAt(base + 2*step)); got != int32(chainedGroup.ID) {
+		t.Errorf("classify the chained face = %d, want its own group %d", got, chainedGroup.ID)
+	}
 	if got := detector.classifyForTest(descriptorAt(base + step)); got != int32(labeled.ID) {
 		t.Errorf("classify after recognition = %d, want group %d", got, labeled.ID)
 	}
