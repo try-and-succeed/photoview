@@ -3,12 +3,15 @@
 package face_detection
 
 import (
+	"math/rand"
 	"testing"
 
+	"github.com/Kagami/go-face"
 	"gorm.io/gorm"
 
 	"github.com/photoview/photoview/api/graphql/models"
 	"github.com/photoview/photoview/api/test_utils"
+	"github.com/photoview/photoview/api/utils"
 )
 
 func TestMain(m *testing.M) {
@@ -388,4 +391,65 @@ func TestRecognizeUnlabeledFacesRespectsVerification(t *testing.T) {
 			t.Errorf("classify the confirmed face = %d, want group %d", got, confirmedGroup.ID)
 		}
 	})
+}
+
+// ClassifyByVote must decide like go-face, or a tolerance would mean
+// something else in reclassifyFaceGroups than during a scan.
+func TestClassifyByVoteMatchesGoFace(t *testing.T) {
+	rec, err := face.NewRecognizer(utils.FaceRecognitionModelsPath())
+	if err != nil {
+		t.Fatal("create recognizer error:", err)
+	}
+	defer rec.Close()
+
+	random := rand.New(rand.NewSource(1))
+	noisy := func(center models.FaceDescriptor) models.FaceDescriptor {
+		// Spread so that about half the probes find a reference within 0.2.
+		var d models.FaceDescriptor
+		for i := range d {
+			d[i] = center[i] + float32(random.NormFloat64()*0.032)
+		}
+		return d
+	}
+
+	centers := make([]models.FaceDescriptor, 8)
+	for c := range centers {
+		for i := range centers[c] {
+			centers[c][i] = float32(random.NormFloat64() * 0.1)
+		}
+	}
+	// Two clusters close together, so votes between groups are contested.
+	for i := range centers[1] {
+		centers[1][i] = centers[0][i] + float32(random.NormFloat64()*0.02)
+	}
+
+	references := make([]Reference, 0)
+	samples := make([]face.Descriptor, 0)
+	cats := make([]int32, 0)
+	for n := 0; n < 400; n++ {
+		c := random.Intn(len(centers))
+		d := noisy(centers[c])
+		references = append(references, Reference{FaceGroupID: c + 100, Descriptor: d})
+		samples = append(samples, face.Descriptor(d))
+		cats = append(cats, int32(c+100))
+	}
+	rec.SetSamples(samples, cats)
+
+	matched := 0
+	for n := 0; n < 600; n++ {
+		probe := noisy(centers[random.Intn(len(centers))])
+		want := rec.ClassifyThreshold(face.Descriptor(probe), DefaultTolerance)
+		got := ClassifyByVote(references, probe, DefaultTolerance)
+		if got != want {
+			t.Fatalf("probe %d: ClassifyByVote = %d, go-face = %d", n, got, want)
+		}
+		if want >= 0 {
+			matched++
+		}
+	}
+	// The test only means something if both outcomes occur often.
+	if matched < 100 || matched > 500 {
+		t.Fatalf("%d of 600 probes matched; adjust the spread so both outcomes occur", matched)
+	}
+	t.Logf("%d of 600 probes matched, all decided like go-face", matched)
 }
