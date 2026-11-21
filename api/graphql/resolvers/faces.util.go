@@ -98,12 +98,13 @@ func getUserOwnedImageFaces(tx *gorm.DB, user *models.User, imageFaceIDs []int) 
 	return userOwnedImageFaces, nil
 }
 
-// imageFacesToDetachOnMerge returns the faces of the source groups that a merge
-// into destFaceGroupID cannot take along, because two of the merged groups
-// show the same photo - and a photo shows a person only once. Per photo the
-// destination keeps what it already has, or else the source group holding the
-// face detected first; the faces the other groups hold on that photo are
-// returned.
+// imageFacesToDetachOnMerge returns the faces that a merge into
+// destFaceGroupID cannot keep in the merged group, because two of the merged
+// groups show the same photo - and a photo shows a person only once. Per photo
+// one group keeps its faces there: the one holding a confirmed face (the
+// destination first), else the destination, else the group holding the face
+// detected first. The faces the other groups hold on that photo are returned,
+// which can include the destination's own when a source's face is confirmed.
 //
 // Several faces one group already holds on one photo stay together: the
 // recognizer often files a whole group photo under one person, and splitting
@@ -123,29 +124,35 @@ func imageFacesToDetachOnMerge(db *gorm.DB, destFaceGroupID int, sourceFaceGroup
 
 	var faces []models.ImageFace
 	if err := db.
-		Select("id", "face_group_id", "media_id").
+		Select("id", "face_group_id", "media_id", "verified").
 		Where("face_group_id IN ? AND media_id IN (?)", faceGroupIDs, sharedMediaQuery).
 		Order("id").
 		Find(&faces).Error; err != nil {
 		return nil, err
 	}
 
-	// The group each shared photo stays with.
+	// The group each shared photo stays with. A face a person confirmed
+	// outranks the destination, so a merge never pushes a confirmed face out
+	// in favour of an unconfirmed one; in order: a confirmed face of the
+	// destination, any confirmed face, the destination, the earliest face.
 	mediaOwner := make(map[int]int)
-	for _, face := range faces {
-		if face.FaceGroupID == destFaceGroupID {
-			mediaOwner[face.MediaID] = destFaceGroupID
+	claims := []func(models.ImageFace) bool{
+		func(face models.ImageFace) bool { return face.Verified && face.FaceGroupID == destFaceGroupID },
+		func(face models.ImageFace) bool { return face.Verified },
+		func(face models.ImageFace) bool { return face.FaceGroupID == destFaceGroupID },
+		func(face models.ImageFace) bool { return true },
+	}
+	for _, claims := range claims {
+		for _, face := range faces {
+			if _, claimed := mediaOwner[face.MediaID]; !claimed && claims(face) {
+				mediaOwner[face.MediaID] = face.FaceGroupID
+			}
 		}
 	}
 
 	detach := make([]int, 0)
 	for _, face := range faces {
-		owner, claimed := mediaOwner[face.MediaID]
-		if !claimed {
-			mediaOwner[face.MediaID] = face.FaceGroupID
-			continue
-		}
-		if owner != face.FaceGroupID {
+		if mediaOwner[face.MediaID] != face.FaceGroupID {
 			detach = append(detach, face.ID)
 		}
 	}
