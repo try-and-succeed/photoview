@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/photoview/photoview/api/database/drivers"
 	"github.com/photoview/photoview/api/graphql/auth"
 	"github.com/photoview/photoview/api/graphql/models"
 	"github.com/photoview/photoview/api/scanner/face_detection"
@@ -65,6 +66,14 @@ func createFaceMutationFixtures(t *testing.T, r *mutationResolver) {
 	}
 	if err := db.Create(&testFaceGroups).Error; err != nil {
 		t.Fatal(err)
+	}
+
+	// Postgres does not move a sequence past IDs that were inserted
+	// explicitly, so the next face group a test creates would get ID 1 again.
+	if drivers.POSTGRES.MatchDatabase(db) {
+		if err := db.Exec("SELECT setval(pg_get_serial_sequence('face_groups', 'id'), (SELECT MAX(id) FROM face_groups))").Error; err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
