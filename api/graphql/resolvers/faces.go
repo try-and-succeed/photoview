@@ -8,6 +8,7 @@ package resolvers
 import (
 	"context"
 	"errors"
+	"log"
 
 	api "github.com/photoview/photoview/api/graphql"
 	"github.com/photoview/photoview/api/graphql/auth"
@@ -337,6 +338,11 @@ func (r *mutationResolver) RecognizeUnlabeledFaces(ctx context.Context) ([]*mode
 	})
 
 	if transactionError != nil {
+		// The detector regrouped its faces in memory before the database
+		// rolled back; bring it back in line.
+		if err := face_detection.GlobalFaceDetector.ReloadFacesFromDatabase(db); err != nil {
+			log.Printf("reload faces after failed recognition: %v", err)
+		}
 		return nil, transactionError
 	}
 
@@ -369,6 +375,20 @@ func (r *mutationResolver) DetachImageFaces(ctx context.Context, imageFaceIDs []
 			userOwnedImageFaceIDs = append(userOwnedImageFaceIDs, imageFace.ID)
 		}
 
+		// Without a face to detach, saving the group below would only leave
+		// an empty one behind.
+		if len(userOwnedImageFaceIDs) == 0 {
+			return errors.New("no faces to detach")
+		}
+
+		var sourceFaceGroups []*models.FaceGroup
+		if err := tx.
+			Joins("LEFT JOIN image_faces ON image_faces.face_group_id = face_groups.id").
+			Where(imageFacesIDInQuestion, userOwnedImageFaceIDs).
+			Find(&sourceFaceGroups).Error; err != nil {
+			return err
+		}
+
 		if err := tx.Save(&newFaceGroup).Error; err != nil {
 			return err
 		}
@@ -377,6 +397,11 @@ func (r *mutationResolver) DetachImageFaces(ctx context.Context, imageFaceIDs []
 			Model(&models.ImageFace{}).
 			Where("id IN (?)", userOwnedImageFaceIDs).
 			Update("face_group_id", newFaceGroup.ID).Error; err != nil {
+			return err
+		}
+
+		// delete face groups if they have become empty
+		if err := deleteEmptyFaceGroups(sourceFaceGroups, tx); err != nil {
 			return err
 		}
 

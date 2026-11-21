@@ -40,14 +40,26 @@ func InitializeFaceDetector(db *gorm.DB) error {
 		return errors.Wrap(err, "get face detection samples from database")
 	}
 
-	GlobalFaceDetector = &faceDetector{
+	detector := &faceDetector{
 		rec:             rec,
 		faceDescriptors: faceDescriptors,
 		faceGroupIDs:    faceGroupIDs,
 		imageFaceIDs:    imageFaceIDs,
 	}
+	detector.mutex.Lock()
+	detector.applySamplesLocked()
+	detector.mutex.Unlock()
+
+	GlobalFaceDetector = detector
 
 	return nil
+}
+
+// applySamplesLocked hands the in-memory samples to the recognizer, which
+// otherwise keeps classifying against the set it was last given. The caller
+// holds fd.mutex.
+func (fd *faceDetector) applySamplesLocked() {
+	fd.rec.SetSamples(fd.faceDescriptors, fd.faceGroupIDs)
 }
 
 func getSamplesFromDatabase(db *gorm.DB) (samples []face.Descriptor, faceGroupIDs []int32, imageFaceIDs []int, err error) {
@@ -84,6 +96,7 @@ func (fd *faceDetector) ReloadFacesFromDatabase(db *gorm.DB) error {
 	fd.faceDescriptors = faceDescriptors
 	fd.faceGroupIDs = faceGroupIDs
 	fd.imageFaceIDs = imageFaceIDs
+	fd.applySamplesLocked()
 
 	return nil
 }
@@ -141,6 +154,11 @@ func (fd *faceDetector) DetectFaces(db *gorm.DB, media *models.Media) error {
 }
 
 func (fd *faceDetector) classifyDescriptor(descriptor face.Descriptor) int32 {
+	// go-face ignores an empty sample set and keeps the previous one, so the
+	// recognizer cannot be told that there is nothing to match against.
+	if len(fd.faceDescriptors) == 0 {
+		return -1
+	}
 	return int32(fd.rec.ClassifyThreshold(descriptor, 0.2))
 }
 
@@ -197,7 +215,7 @@ func (fd *faceDetector) classifyFace(db *gorm.DB, face *face.Face, media *models
 	fd.faceGroupIDs = append(fd.faceGroupIDs, int32(faceGroup.ID))
 	fd.imageFaceIDs = append(fd.imageFaceIDs, imageFace.ID)
 
-	fd.rec.SetSamples(fd.faceDescriptors, fd.faceGroupIDs)
+	fd.applySamplesLocked()
 	return nil
 }
 
@@ -210,6 +228,7 @@ func (fd *faceDetector) MergeCategories(sourceID int32, destID int32) {
 			fd.faceGroupIDs[i] = destID
 		}
 	}
+	fd.applySamplesLocked()
 }
 
 func (fd *faceDetector) MergeImageFaces(imageFaceIDs []int, destFaceGroupID int32) {
@@ -226,6 +245,7 @@ func (fd *faceDetector) MergeImageFaces(imageFaceIDs []int, destFaceGroupID int3
 			}
 		}
 	}
+	fd.applySamplesLocked()
 }
 
 func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) ([]*models.ImageFace, error) {
@@ -283,7 +303,14 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 	fd.faceDescriptors = newDescriptors
 	fd.imageFaceIDs = newImageFaceIDs
 
+	// Classify against the labeled faces only, and keep that reference set
+	// for the whole run: a face placed here must not pull in the next one,
+	// or one wrong match chains into many.
+	fd.applySamplesLocked()
+	defer fd.applySamplesLocked()
+
 	updatedImageFaces := make([]*models.ImageFace, 0)
+	sourceFaceGroupIDs := make(map[int32]bool)
 
 	for i := range unrecognizedDescriptors {
 		descriptor := unrecognizedDescriptors[i]
@@ -300,19 +327,31 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 		} else {
 			// found new match, update the database
 			var imageFace models.ImageFace
-			if err := tx.Model(&models.ImageFace{}).First(imageFace, imageFaceID).Error; err != nil {
+			if err := tx.First(&imageFace, imageFaceID).Error; err != nil {
 				return nil, err
 			}
 
-			if err := tx.Model(&imageFace).Update("face_group_id", int(faceGroupID)).Error; err != nil {
+			if err := tx.Model(&imageFace).Update("face_group_id", int(match)).Error; err != nil {
 				return nil, err
 			}
 
 			updatedImageFaces = append(updatedImageFaces, &imageFace)
+			sourceFaceGroupIDs[faceGroupID] = true
 
 			fd.faceGroupIDs = append(fd.faceGroupIDs, match)
 			fd.faceDescriptors = append(fd.faceDescriptors, descriptor)
 			fd.imageFaceIDs = append(fd.imageFaceIDs, imageFaceID)
+		}
+	}
+
+	// The unlabeled groups whose faces all found their person are empty now.
+	for faceGroupID := range sourceFaceGroupIDs {
+		if err := tx.
+			Where("id = ?", faceGroupID).
+			Where("NOT EXISTS (?)", tx.Table("image_faces").Select("1").
+				Where("image_faces.face_group_id = face_groups.id")).
+			Delete(&models.FaceGroup{}).Error; err != nil {
+			return nil, err
 		}
 	}
 
