@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/photoview/photoview/api/graphql/auth"
 	"github.com/photoview/photoview/api/graphql/models"
 )
 
@@ -310,4 +311,58 @@ func TestMyMediaNeedingReview(t *testing.T) {
 			t.Errorf("pages = %s, want [3][2][1][]", got)
 		}
 	})
+}
+
+// The counts run once per face group, concurrently, and share the request's
+// user: they must neither load its albums nor cache them on it.
+func TestVerificationQueriesLeaveTheUserAlone(t *testing.T) {
+	r, _, linked := setupVerifyTest(t)
+	setFaceFlags(t, r, []int{1}, map[string]any{"verified": true})
+	setFaceFlags(t, r, []int{2}, map[string]any{"needs_review": true})
+
+	// A face on a photo outside the user's albums counts for nothing.
+	other := models.Album{Title: "Other Album", Path: "/other-album"}
+	if err := r.database.Create(&other).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := r.database.Create(&models.Media{Model: models.Model{ID: 5}, Path: "test5", AlbumID: other.ID}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := r.database.Create(&models.ImageFace{Model: models.Model{ID: 5}, FaceGroupID: 1, MediaID: 5, Verified: true, NeedsReview: true}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	// Linking the album filled linked.Albums; a request starts with a user
+	// fresh from the database.
+	user := &models.User{}
+	if err := r.database.First(user, linked.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	ctx := auth.AddUserToContext(context.Background(), user)
+
+	groupResolver := &faceGroupResolver{r.Resolver}
+	group := &models.FaceGroup{Model: models.Model{ID: 1}}
+	verified, err := groupResolver.VerifiedFaceCount(ctx, group)
+	if err != nil {
+		t.Fatal(err)
+	}
+	review, err := groupResolver.ReviewFaceCount(ctx, group)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if verified != 1 || review != 1 {
+		t.Errorf("verifiedFaceCount = %d, reviewFaceCount = %d; want 1 and 1", verified, review)
+	}
+
+	media, err := (&queryResolver{r.Resolver}).MyMediaNeedingReview(ctx, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(media) != 1 || media[0].ID != 2 {
+		t.Errorf("myMediaNeedingReview returned %d photos, want only photo 2", len(media))
+	}
+
+	if len(user.Albums) != 0 {
+		t.Errorf("the queries loaded %d albums into the shared user", len(user.Albums))
+	}
 }

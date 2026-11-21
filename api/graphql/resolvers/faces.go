@@ -553,14 +553,7 @@ func (r *queryResolver) MyMediaNeedingReview(ctx context.Context, faceGroupID *i
 		return nil, ErrFaceDetectorNotInitialized
 	}
 
-	if err := user.FillAlbums(db); err != nil {
-		return nil, err
-	}
-
-	userAlbumIDs := make([]int, len(user.Albums))
-	for i, album := range user.Albums {
-		userAlbumIDs[i] = album.ID
-	}
+	userAlbumIDs := userAlbumIDsSubquery(db, user)
 
 	facesToReview := db.
 		Table("image_faces").
