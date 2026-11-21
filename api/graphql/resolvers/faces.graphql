@@ -6,6 +6,16 @@ type FaceRectangle {
   maxY: Float!
 }
 
+"How a face got into its current group"
+enum FaceAssignment {
+  "Placed by the face detector during a scan"
+  DETECTOR
+  "Moved or split off by a person"
+  USER
+  "Placed by an automatic re-identification run"
+  RECLASSIFY
+}
+
 "A collection of faces of a particular person"
 type FaceGroup {
   id: ID!
@@ -25,6 +35,12 @@ type ImageFace {
   rectangle: FaceRectangle!
   "The `FaceGroup` that contains this `ImageFace`"
   faceGroup: FaceGroup!
+  "Confirmed by a person; never moved automatically"
+  verified: Boolean!
+  "Who put the face into its current group"
+  assignedBy: FaceAssignment!
+  "Placed or checked by an automatic run and not yet reviewed"
+  needsReview: Boolean!
 }
 
 extend type Query {

@@ -87,10 +87,13 @@ type ComplexityRoot struct {
 	}
 
 	ImageFace struct {
-		FaceGroup func(childComplexity int) int
-		ID        func(childComplexity int) int
-		Media     func(childComplexity int) int
-		Rectangle func(childComplexity int) int
+		AssignedBy  func(childComplexity int) int
+		FaceGroup   func(childComplexity int) int
+		ID          func(childComplexity int) int
+		Media       func(childComplexity int) int
+		NeedsReview func(childComplexity int) int
+		Rectangle   func(childComplexity int) int
+		Verified    func(childComplexity int) int
 	}
 
 	Media struct {
@@ -546,6 +549,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.FaceRectangle.MinY(childComplexity), true
 
+	case "ImageFace.assignedBy":
+		if e.ComplexityRoot.ImageFace.AssignedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ImageFace.AssignedBy(childComplexity), true
 	case "ImageFace.faceGroup":
 		if e.ComplexityRoot.ImageFace.FaceGroup == nil {
 			break
@@ -564,12 +573,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ImageFace.Media(childComplexity), true
+	case "ImageFace.needsReview":
+		if e.ComplexityRoot.ImageFace.NeedsReview == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ImageFace.NeedsReview(childComplexity), true
 	case "ImageFace.rectangle":
 		if e.ComplexityRoot.ImageFace.Rectangle == nil {
 			break
 		}
 
 		return e.ComplexityRoot.ImageFace.Rectangle(childComplexity), true
+	case "ImageFace.verified":
+		if e.ComplexityRoot.ImageFace.Verified == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ImageFace.Verified(childComplexity), true
 
 	case "Media.album":
 		if e.ComplexityRoot.Media.Album == nil {
@@ -1757,6 +1778,12 @@ func (ec *executionContext) childFields_ImageFace(ctx context.Context, field gra
 		return ec.fieldContext_ImageFace_rectangle(ctx, field)
 	case "faceGroup":
 		return ec.fieldContext_ImageFace_faceGroup(ctx, field)
+	case "verified":
+		return ec.fieldContext_ImageFace_verified(ctx, field)
+	case "assignedBy":
+		return ec.fieldContext_ImageFace_assignedBy(ctx, field)
+	case "needsReview":
+		return ec.fieldContext_ImageFace_needsReview(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type ImageFace", field.Name)
 }
@@ -3809,6 +3836,75 @@ func (ec *executionContext) fieldContext_ImageFace_faceGroup(_ context.Context, 
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _ImageFace_verified(ctx context.Context, field graphql.CollectedField, obj *models.ImageFace) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ImageFace_verified(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Verified, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ImageFace_verified(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ImageFace", field, false, false, "Boolean")
+}
+
+func (ec *executionContext) _ImageFace_assignedBy(ctx context.Context, field graphql.CollectedField, obj *models.ImageFace) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ImageFace_assignedBy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssignedBy, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v models.FaceAssignment) graphql.Marshaler {
+			return ec.marshalNFaceAssignment2githubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceAssignment(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ImageFace_assignedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ImageFace", field, false, false, "FaceAssignment")
+}
+
+func (ec *executionContext) _ImageFace_needsReview(ctx context.Context, field graphql.CollectedField, obj *models.ImageFace) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ImageFace_needsReview(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NeedsReview, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ImageFace_needsReview(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ImageFace", field, false, false, "Boolean")
 }
 
 func (ec *executionContext) _Media_id(ctx context.Context, field graphql.CollectedField, obj *models.Media) (ret graphql.Marshaler) {
@@ -9844,6 +9940,21 @@ func (ec *executionContext) _ImageFace(ctx context.Context, sel ast.SelectionSet
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._ImageFace_faceGroup(ctx, field, obj)
 				})
+		case "verified":
+			out.Values[i] = ec._ImageFace_verified(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "assignedBy":
+			out.Values[i] = ec._ImageFace_assignedBy(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "needsReview":
+			out.Values[i] = ec._ImageFace_needsReview(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -11474,6 +11585,16 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 		graphql.AddInvalidNullFromMarshaler(ctx, "Boolean!")
 	}
 	return res
+}
+
+func (ec *executionContext) unmarshalNFaceAssignment2githubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceAssignment(ctx context.Context, v any) (models.FaceAssignment, error) {
+	var res models.FaceAssignment
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNFaceAssignment2githubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceAssignment(ctx context.Context, sel ast.SelectionSet, v models.FaceAssignment) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) marshalNFaceGroup2ᚕᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceGroupᚄ(ctx context.Context, sel ast.SelectionSet, v []*models.FaceGroup) graphql.Marshaler {

@@ -273,10 +273,16 @@ func (r *mutationResolver) MoveImageFaces(ctx context.Context, imageFaceIDs []in
 			return err
 		}
 
+		// Moving a face to a person confirms it.
 		if err := tx.
 			Model(&models.ImageFace{}).
 			Where("id IN (?)", userOwnedImageFaceIDs).
-			Update("face_group_id", destFaceGroup.ID).Error; err != nil {
+			Updates(map[string]any{
+				"face_group_id": destFaceGroup.ID,
+				"verified":      true,
+				"assigned_by":   models.FaceAssignmentUser,
+				"needs_review":  false,
+			}).Error; err != nil {
 			return err
 		}
 
@@ -374,10 +380,16 @@ func (r *mutationResolver) DetachImageFaces(ctx context.Context, imageFaceIDs []
 			return err
 		}
 
+		// Not confirmed: the new group may hold several people.
 		if err := tx.
 			Model(&models.ImageFace{}).
 			Where("id IN (?)", userOwnedImageFaceIDs).
-			Update("face_group_id", newFaceGroup.ID).Error; err != nil {
+			Updates(map[string]any{
+				"face_group_id": newFaceGroup.ID,
+				"verified":      false,
+				"assigned_by":   models.FaceAssignmentUser,
+				"needs_review":  false,
+			}).Error; err != nil {
 			return err
 		}
 
