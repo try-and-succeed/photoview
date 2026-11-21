@@ -229,14 +229,7 @@ func countFaceGroupFaces(ctx context.Context, db *gorm.DB, obj *models.FaceGroup
 		return -1, ErrFaceDetectorNotInitialized
 	}
 
-	if err := user.FillAlbums(db); err != nil {
-		return -1, err
-	}
-
-	userAlbumIDs := make([]int, len(user.Albums))
-	for i, album := range user.Albums {
-		userAlbumIDs[i] = album.ID
-	}
+	userAlbumIDs := userAlbumIDsSubquery(db, user)
 
 	var count int64
 	if err := db.
