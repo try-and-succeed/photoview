@@ -8,6 +8,7 @@ package resolvers
 import (
 	"context"
 	"errors"
+	"log"
 
 	api "github.com/photoview/photoview/api/graphql"
 	"github.com/photoview/photoview/api/graphql/auth"
@@ -318,6 +319,11 @@ func (r *mutationResolver) RecognizeUnlabeledFaces(ctx context.Context) ([]*mode
 	})
 
 	if transactionError != nil {
+		// The detector regrouped its faces in memory before the database
+		// rolled back; bring it back in line.
+		if err := face_detection.GlobalFaceDetector.ReloadFacesFromDatabase(db); err != nil {
+			log.Printf("reload faces after failed recognition: %v", err)
+		}
 		return nil, transactionError
 	}
 
