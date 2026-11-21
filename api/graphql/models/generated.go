@@ -25,6 +25,12 @@ type Coordinates struct {
 	Longitude float64 `json:"longitude"`
 }
 
+// Which faces of a group to list
+type ImageFaceFilter struct {
+	Verified    *bool `json:"verified,omitempty"`
+	NeedsReview *bool `json:"needsReview,omitempty"`
+}
+
 type MediaDownload struct {
 	// A description of the role of the media file
 	Title    string    `json:"title"`

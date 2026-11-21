@@ -18,7 +18,7 @@ import (
 )
 
 // ImageFaces is the resolver for the imageFaces field.
-func (r *faceGroupResolver) ImageFaces(ctx context.Context, obj *models.FaceGroup, paginate *models.Pagination) ([]*models.ImageFace, error) {
+func (r *faceGroupResolver) ImageFaces(ctx context.Context, obj *models.FaceGroup, paginate *models.Pagination, filter *models.ImageFaceFilter) ([]*models.ImageFace, error) {
 	db := r.DB(ctx)
 	user := auth.UserFromContext(ctx)
 	if user == nil {
@@ -42,6 +42,13 @@ func (r *faceGroupResolver) ImageFaces(ctx context.Context, obj *models.FaceGrou
 		Joins("Media").
 		Where(faceGroupIDIsQuestion, obj.ID).
 		Where("album_id IN (?)", userAlbumIDs)
+
+	if filter != nil && filter.Verified != nil {
+		query = query.Where("image_faces.verified = ?", *filter.Verified)
+	}
+	if filter != nil && filter.NeedsReview != nil {
+		query = query.Where("image_faces.needs_review = ?", *filter.NeedsReview)
+	}
 
 	query = models.FormatSQL(query, nil, paginate)
 
@@ -86,6 +93,16 @@ func (r *faceGroupResolver) ImageFaceCount(ctx context.Context, obj *models.Face
 	}
 
 	return int(count), nil
+}
+
+// VerifiedFaceCount is the resolver for the verifiedFaceCount field.
+func (r *faceGroupResolver) VerifiedFaceCount(ctx context.Context, obj *models.FaceGroup) (int, error) {
+	return countFaceGroupFaces(ctx, r.DB(ctx), obj, "image_faces.verified = ?")
+}
+
+// ReviewFaceCount is the resolver for the reviewFaceCount field.
+func (r *faceGroupResolver) ReviewFaceCount(ctx context.Context, obj *models.FaceGroup) (int, error) {
+	return countFaceGroupFaces(ctx, r.DB(ctx), obj, "image_faces.needs_review = ?")
 }
 
 // Media is the resolver for the media field.
@@ -410,6 +427,45 @@ func (r *mutationResolver) DetachImageFaces(ctx context.Context, imageFaceIDs []
 	return &newFaceGroup, nil
 }
 
+// SetMediaFacesVerified is the resolver for the setMediaFacesVerified field.
+func (r *mutationResolver) SetMediaFacesVerified(ctx context.Context, mediaIDs []int, verified bool) ([]*models.ImageFace, error) {
+	db := r.DB(ctx)
+	user := auth.UserFromContext(ctx)
+	if user == nil {
+		return nil, errors.New("unauthorized")
+	}
+
+	if face_detection.GlobalFaceDetector == nil {
+		return nil, ErrFaceDetectorNotInitialized
+	}
+
+	if len(mediaIDs) == 0 {
+		return []*models.ImageFace{}, nil
+	}
+
+	var imageFaceIDs []int
+	if err := db.Model(&models.ImageFace{}).Where("media_id IN (?)", mediaIDs).Pluck("id", &imageFaceIDs).Error; err != nil {
+		return nil, err
+	}
+
+	return setUserOwnedImageFacesVerified(db, user, imageFaceIDs, verified)
+}
+
+// SetImageFacesVerified is the resolver for the setImageFacesVerified field.
+func (r *mutationResolver) SetImageFacesVerified(ctx context.Context, imageFaceIDs []int, verified bool) ([]*models.ImageFace, error) {
+	db := r.DB(ctx)
+	user := auth.UserFromContext(ctx)
+	if user == nil {
+		return nil, errors.New("unauthorized")
+	}
+
+	if face_detection.GlobalFaceDetector == nil {
+		return nil, ErrFaceDetectorNotInitialized
+	}
+
+	return setUserOwnedImageFacesVerified(db, user, imageFaceIDs, verified)
+}
+
 // MyFaceGroups is the resolver for the myFaceGroups field.
 func (r *queryResolver) MyFaceGroups(ctx context.Context, paginate *models.Pagination) ([]*models.FaceGroup, error) {
 	db := r.DB(ctx)
@@ -483,6 +539,54 @@ func (r *queryResolver) FaceGroup(ctx context.Context, id int) (*models.FaceGrou
 	}
 
 	return &faceGroup, nil
+}
+
+// MyMediaNeedingReview is the resolver for the myMediaNeedingReview field.
+func (r *queryResolver) MyMediaNeedingReview(ctx context.Context, faceGroupID *int, paginate *models.Pagination) ([]*models.Media, error) {
+	db := r.DB(ctx)
+	user := auth.UserFromContext(ctx)
+	if user == nil {
+		return nil, errors.New("unauthorized")
+	}
+
+	if face_detection.GlobalFaceDetector == nil {
+		return nil, ErrFaceDetectorNotInitialized
+	}
+
+	if err := user.FillAlbums(db); err != nil {
+		return nil, err
+	}
+
+	userAlbumIDs := make([]int, len(user.Albums))
+	for i, album := range user.Albums {
+		userAlbumIDs[i] = album.ID
+	}
+
+	facesToReview := db.
+		Table("image_faces").
+		Select("1").
+		Where("image_faces.media_id = media.id").
+		Where("image_faces.needs_review = ?", true)
+	if faceGroupID != nil {
+		facesToReview = facesToReview.Where("image_faces.face_group_id = ?", *faceGroupID)
+	}
+
+	query := db.
+		Model(&models.Media{}).
+		Where(mediaAlbumIDInQuestion, userAlbumIDs).
+		Where("EXISTS (?)", facesToReview).
+		Order("media.date_shot DESC").
+		// A unique last key, or pages can repeat or skip photos.
+		Order("media.id DESC")
+
+	query = models.FormatSQL(query, nil, paginate)
+
+	var media []*models.Media
+	if err := query.Find(&media).Error; err != nil {
+		return nil, err
+	}
+
+	return media, nil
 }
 
 // FaceGroup returns api.FaceGroupResolver implementation.
