@@ -20,6 +20,8 @@ type faceDetector struct {
 	faceDescriptors []face.Descriptor
 	faceGroupIDs    []int32
 	imageFaceIDs    []int
+	// How many samples the recognizer was last given.
+	appliedSamples int
 }
 
 func InitializeFaceDetector(db *gorm.DB) error {
@@ -40,14 +42,27 @@ func InitializeFaceDetector(db *gorm.DB) error {
 		return errors.Wrap(err, "get face detection samples from database")
 	}
 
-	GlobalFaceDetector = &faceDetector{
+	detector := &faceDetector{
 		rec:             rec,
 		faceDescriptors: faceDescriptors,
 		faceGroupIDs:    faceGroupIDs,
 		imageFaceIDs:    imageFaceIDs,
 	}
+	detector.mutex.Lock()
+	detector.applySamplesLocked()
+	detector.mutex.Unlock()
+
+	GlobalFaceDetector = detector
 
 	return nil
+}
+
+// applySamplesLocked hands the in-memory samples to the recognizer, which
+// otherwise keeps classifying against the set it was last given. The caller
+// holds fd.mutex.
+func (fd *faceDetector) applySamplesLocked() {
+	fd.rec.SetSamples(fd.faceDescriptors, fd.faceGroupIDs)
+	fd.appliedSamples = len(fd.faceDescriptors)
 }
 
 func getSamplesFromDatabase(db *gorm.DB) (samples []face.Descriptor, faceGroupIDs []int32, imageFaceIDs []int, err error) {
@@ -84,6 +99,7 @@ func (fd *faceDetector) ReloadFacesFromDatabase(db *gorm.DB) error {
 	fd.faceDescriptors = faceDescriptors
 	fd.faceGroupIDs = faceGroupIDs
 	fd.imageFaceIDs = imageFaceIDs
+	fd.applySamplesLocked()
 
 	return nil
 }
@@ -128,6 +144,11 @@ func (fd *faceDetector) DetectFaces(db *gorm.DB, media *models.Media) error {
 }
 
 func (fd *faceDetector) classifyDescriptor(descriptor face.Descriptor) int32 {
+	// go-face ignores an empty sample set and keeps the previous one, so the
+	// recognizer cannot be told that there is nothing to match against.
+	if fd.appliedSamples == 0 {
+		return -1
+	}
 	return int32(fd.rec.ClassifyThreshold(descriptor, 0.2))
 }
 
@@ -184,7 +205,7 @@ func (fd *faceDetector) classifyFace(db *gorm.DB, face *face.Face, media *models
 	fd.faceGroupIDs = append(fd.faceGroupIDs, int32(faceGroup.ID))
 	fd.imageFaceIDs = append(fd.imageFaceIDs, imageFace.ID)
 
-	fd.rec.SetSamples(fd.faceDescriptors, fd.faceGroupIDs)
+	fd.applySamplesLocked()
 	return nil
 }
 
@@ -197,6 +218,7 @@ func (fd *faceDetector) MergeCategories(sourceID int32, destID int32) {
 			fd.faceGroupIDs[i] = destID
 		}
 	}
+	fd.applySamplesLocked()
 }
 
 func (fd *faceDetector) MergeImageFaces(imageFaceIDs []int, destFaceGroupID int32) {
@@ -213,6 +235,7 @@ func (fd *faceDetector) MergeImageFaces(imageFaceIDs []int, destFaceGroupID int3
 			}
 		}
 	}
+	fd.applySamplesLocked()
 }
 
 func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) ([]*models.ImageFace, error) {
@@ -270,6 +293,8 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 	fd.faceDescriptors = newDescriptors
 	fd.imageFaceIDs = newImageFaceIDs
 
+	fd.applySamplesLocked()
+
 	updatedImageFaces := make([]*models.ImageFace, 0)
 
 	for i := range unrecognizedDescriptors {
@@ -284,14 +309,15 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 			fd.faceGroupIDs = append(fd.faceGroupIDs, faceGroupID)
 			fd.faceDescriptors = append(fd.faceDescriptors, descriptor)
 			fd.imageFaceIDs = append(fd.imageFaceIDs, imageFaceID)
+			fd.applySamplesLocked()
 		} else {
 			// found new match, update the database
 			var imageFace models.ImageFace
-			if err := tx.Model(&models.ImageFace{}).First(imageFace, imageFaceID).Error; err != nil {
+			if err := tx.First(&imageFace, imageFaceID).Error; err != nil {
 				return nil, err
 			}
 
-			if err := tx.Model(&imageFace).Update("face_group_id", int(faceGroupID)).Error; err != nil {
+			if err := tx.Model(&imageFace).Update("face_group_id", int(match)).Error; err != nil {
 				return nil, err
 			}
 
@@ -300,6 +326,7 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 			fd.faceGroupIDs = append(fd.faceGroupIDs, match)
 			fd.faceDescriptors = append(fd.faceDescriptors, descriptor)
 			fd.imageFaceIDs = append(fd.imageFaceIDs, imageFaceID)
+			fd.applySamplesLocked()
 		}
 	}
 
