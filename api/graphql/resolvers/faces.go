@@ -226,10 +226,16 @@ func (r *mutationResolver) CombineFaceGroups(ctx context.Context, destinationFac
 				return err
 			}
 
+			// Its new group is unchecked, so a confirmation no longer holds
+			// and the face is up for review.
 			if err := tx.
 				Model(&models.ImageFace{}).
 				Where("id = ?", imageFaceID).
-				Update("face_group_id", newFaceGroup.ID).Error; err != nil {
+				Updates(map[string]any{
+					"face_group_id": newFaceGroup.ID,
+					"verified":      false,
+					"needs_review":  true,
+				}).Error; err != nil {
 				return err
 			}
 
