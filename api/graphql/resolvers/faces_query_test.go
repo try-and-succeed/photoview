@@ -2,6 +2,7 @@ package resolvers
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"sync"
 	"testing"
@@ -88,8 +89,8 @@ func TestFaceQueriesStayInUserAlbums(t *testing.T) {
 	if group, err := queryResolver.FaceGroup(ctx, 1); err != nil || group.ID != 1 {
 		t.Errorf("FaceGroup(1) = %v, %v; want group 1", group, err)
 	}
-	if group, err := queryResolver.FaceGroup(ctx, 2); err != nil || group.ID != 0 {
-		t.Errorf("FaceGroup(2) = %v, %v; want nothing, it is only on another album", group, err)
+	if _, err := queryResolver.FaceGroup(ctx, 2); !errors.Is(err, ErrFaceGroupNotFound) {
+		t.Errorf("FaceGroup(2) error = %v; want %v, it is only on another album", err, ErrFaceGroupNotFound)
 	}
 
 	// The resolvers of one request share the user and run concurrently, so

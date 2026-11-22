@@ -45,7 +45,7 @@ func TestFaceGroupNotFound(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_, err := r.MoveImageFaces(ctx, []int{1}, missing)
+		_, err := r.MoveImageFaces(ctx, []int{1}, missing, nil)
 		expectNotFound(t, err)
 		if group := faceGroupOf(t, r, 1); group != 1 {
 			t.Errorf("face 1 is in group %d, want it to stay in group 1", group)
@@ -77,7 +77,7 @@ func TestFaceGroupNotFound(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_, err := r.MoveImageFaces(userCtx, []int{1}, 2)
+		_, err := r.MoveImageFaces(userCtx, []int{1}, 2, nil)
 		expectNotFound(t, err)
 		if group := faceGroupOf(t, r, 1); group != 1 {
 			t.Errorf("face 1 is in group %d, want it to stay in group 1", group)
