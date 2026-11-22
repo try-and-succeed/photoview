@@ -105,6 +105,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Build test image
+        id: build
         uses: docker/build-push-action@v7
         with:
           pull: true
@@ -163,7 +164,8 @@ jobs:
           overwrite: true
 
       - name: Check extracted translations
-        if: ${{ !cancelled() }}
+        # Without the image, `docker run` would pull an unrelated photoview/ui from Docker Hub.
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           docker run --name i18n photoview/ui npm run extractTranslations -- --fail-on-warnings
           # The trailing `/.` copies the directory's contents. `docker cp` runs no shell, so `*` would
@@ -174,6 +176,8 @@ jobs:
             echo '--- FAIL: The extracted translations are out of sync with the UI code. Please run `npm run extractTranslations` under `./ui` and commit the result to this branch.'
             echo 'These are the changes:'
             git status --porcelain -- ui/src/extractedTranslations
+            # Without --intent-to-add, git diff would leave out the content of new files.
+            git add --intent-to-add -- ui/src/extractedTranslations
             git diff -- ui/src/extractedTranslations
             exit 1
           fi
