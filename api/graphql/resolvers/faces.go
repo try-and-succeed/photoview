@@ -556,12 +556,7 @@ func (r *queryResolver) FaceGroup(ctx context.Context, id int) (*models.FaceGrou
 		Where("face_groups.id = ?", id).
 		Where(mediaAlbumIDInQuestion, userAlbumIDs)
 
-	var faceGroup models.FaceGroup
-	if err := faceGroupQuery.Find(&faceGroup).Error; err != nil {
-		return nil, err
-	}
-
-	return &faceGroup, nil
+	return firstFaceGroup(faceGroupQuery)
 }
 
 // MyMediaNeedingReview is the resolver for the myMediaNeedingReview field.
