@@ -139,6 +139,53 @@ func FindAlbumsForAlbum(db *gorm.DB, album *models.Album, albumCache *scanner_ca
 	return albums, scanErrors
 }
 
+// FindNewSubAlbumsForAlbum is the shallow rescan of an existing album: it
+// returns the album itself, so its own media get scanned, plus its direct
+// sub-directories that are not albums yet, each with everything below it.
+// Existing sub-albums are left alone and nothing is removed: this is the cheap
+// way to pick up photos or a folder that were just added, without walking the
+// whole subtree. The album comes first in the result.
+func FindNewSubAlbumsForAlbum(db *gorm.DB, album *models.Album, albumCache *scanner_cache.AlbumScannerCache) ([]*models.Album, []error) {
+	dirContent, err := os.ReadDir(album.Path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, []error{errors.Errorf("Album directory does not exist '%s'\n", album.Path)}
+		}
+		return nil, []error{errors.Errorf("Could not read album directory: %s\n", album.Path)}
+	}
+
+	albumIgnore, err := getPhotoviewIgnore(album.Path)
+	if err != nil {
+		log.Printf("Failed to get ignore file, err = %s", err)
+	}
+	// The walk records this for every album it reaches; the media scan of
+	// the album itself reads it from the cache.
+	albumCache.InsertAlbumIgnore(album.Path, albumIgnore)
+
+	isAlbum := func(dirPath string) (bool, error) {
+		var count int64
+		if err := db.Model(&models.Album{}).Where("path_hash = ?", models.MD5Hash(dirPath)).Count(&count).Error; err != nil {
+			return false, errors.Wrapf(err, "look up album (%s)", dirPath)
+		}
+		return count > 0, nil
+	}
+
+	newPaths, scanErrors := subAlbumDirs(album.Path, dirContent, albumCache, albumIgnore, isAlbum)
+
+	scanQueue := list.New()
+	for _, newPath := range newPaths {
+		scanQueue.PushBack(scanInfo{
+			path:   newPath,
+			parent: album,
+			ignore: albumIgnore,
+		})
+	}
+
+	newAlbums, walkErrors := walkAlbumScanQueue(db, scanQueue, albumCache, nil)
+
+	return append([]*models.Album{album}, newAlbums...), append(scanErrors, walkErrors...)
+}
+
 type scanInfo struct {
 	path   string
 	parent *models.Album
@@ -261,46 +308,73 @@ func walkAlbumScanQueue(db *gorm.DB, scanQueue *list.List, albumCache *scanner_c
 		}
 
 		// Scan for sub-albums
-		for _, item := range dirContent {
-			subalbumPath := path.Join(albumPath, item.Name())
-
-			// Skip if directory is hidden
-			if path.Base(subalbumPath)[0:1] == "." {
-				continue
-			}
-
-			isDirSymlink, err := utils.IsDirSymlink(subalbumPath)
-			if err != nil {
-				scanErrors = append(scanErrors, errors.Wrapf(err, "could not check for symlink target of %s", subalbumPath))
-				continue
-			}
-
-			if !item.IsDir() && !isDirSymlink {
-				continue
-			}
-
-			containsPhotos, err := directoryContainsPhotos(subalbumPath, albumCache, albumIgnore)
-			if err != nil {
-				// Not queueing it is the same outcome as an empty directory,
-				// so without this the walk would look complete and the
-				// cleanup would delete the album for a directory it simply
-				// could not open.
-				scanErrors = append(scanErrors, err)
-
-				continue
-			}
-
-			if containsPhotos {
-				scanQueue.PushBack(scanInfo{
-					path:   subalbumPath,
-					parent: album,
-					ignore: albumIgnore,
-				})
-			}
+		subAlbumPaths, subErrors := subAlbumDirs(albumPath, dirContent, albumCache, albumIgnore, nil)
+		scanErrors = append(scanErrors, subErrors...)
+		for _, subalbumPath := range subAlbumPaths {
+			scanQueue.PushBack(scanInfo{
+				path:   subalbumPath,
+				parent: album,
+				ignore: albumIgnore,
+			})
 		}
 	}
 
 	return userAlbums, scanErrors
+}
+
+// subAlbumDirs returns the sub-directories of albumPath that hold media and
+// so become albums. skip, when set, leaves out a directory before it is
+// searched for media, which is the expensive part for a deep tree.
+func subAlbumDirs(albumPath string, dirContent []os.DirEntry, albumCache *scanner_cache.AlbumScannerCache, albumIgnore []string, skip func(string) (bool, error)) ([]string, []error) {
+	scanErrors := make([]error, 0)
+	subAlbumPaths := make([]string, 0)
+
+	for _, item := range dirContent {
+		subalbumPath := path.Join(albumPath, item.Name())
+
+		// Skip if directory is hidden
+		if path.Base(subalbumPath)[0:1] == "." {
+			continue
+		}
+
+		isDirSymlink, err := utils.IsDirSymlink(subalbumPath)
+		if err != nil {
+			scanErrors = append(scanErrors, errors.Wrapf(err, "could not check for symlink target of %s", subalbumPath))
+			continue
+		}
+
+		if !item.IsDir() && !isDirSymlink {
+			continue
+		}
+
+		if skip != nil {
+			skipped, err := skip(subalbumPath)
+			if err != nil {
+				scanErrors = append(scanErrors, err)
+				continue
+			}
+			if skipped {
+				continue
+			}
+		}
+
+		containsPhotos, err := directoryContainsPhotos(subalbumPath, albumCache, albumIgnore)
+		if err != nil {
+			// Not queueing it is the same outcome as an empty directory,
+			// so without this the walk would look complete and the
+			// cleanup would delete the album for a directory it simply
+			// could not open.
+			scanErrors = append(scanErrors, err)
+
+			continue
+		}
+
+		if containsPhotos {
+			subAlbumPaths = append(subAlbumPaths, subalbumPath)
+		}
+	}
+
+	return subAlbumPaths, scanErrors
 }
 
 // directoryContainsPhotos reports whether the directory, or anything below it,

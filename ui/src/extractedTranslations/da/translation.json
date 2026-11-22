@@ -260,6 +260,7 @@
       },
       "reset_cover": "Nulstil coverbillede",
       "scan": {
+        "new_sub_albums": "",
         "rescan": "",
         "title": ""
       },

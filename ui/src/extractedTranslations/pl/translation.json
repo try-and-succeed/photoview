@@ -260,6 +260,7 @@
       },
       "reset_cover": "Zresetuj zdjęcie okładki",
       "scan": {
+        "new_sub_albums": "",
         "rescan": "",
         "title": ""
       },

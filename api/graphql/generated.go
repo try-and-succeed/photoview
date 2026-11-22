@@ -155,7 +155,7 @@ type ComplexityRoot struct {
 		ProtectShareToken           func(childComplexity int, token string, password *string) int
 		RecognizeUnlabeledFaces     func(childComplexity int) int
 		ResetAlbumCover             func(childComplexity int, albumID int) int
-		ScanAlbum                   func(childComplexity int, albumID int) int
+		ScanAlbum                   func(childComplexity int, albumID int, onlyNewSubAlbums *bool) int
 		ScanAll                     func(childComplexity int) int
 		ScanUser                    func(childComplexity int, userID int) int
 		SetAlbumCover               func(childComplexity int, coverID int) int
@@ -319,7 +319,7 @@ type MutationResolver interface {
 	FavoriteMedia(ctx context.Context, mediaID int, favorite bool) (*models.Media, error)
 	ScanAll(ctx context.Context) (*models.ScannerResult, error)
 	ScanUser(ctx context.Context, userID int) (*models.ScannerResult, error)
-	ScanAlbum(ctx context.Context, albumID int) (*models.ScannerResult, error)
+	ScanAlbum(ctx context.Context, albumID int, onlyNewSubAlbums *bool) (*models.ScannerResult, error)
 	SetPeriodicScanInterval(ctx context.Context, interval int) (int, error)
 	SetScannerConcurrentWorkers(ctx context.Context, workers int) (int, error)
 	ShareAlbum(ctx context.Context, albumID int, expire *time.Time, password *string, label *string) (*models.ShareToken, error)
@@ -941,7 +941,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.ScanAlbum(childComplexity, args["albumId"].(int)), true
+		return e.ComplexityRoot.Mutation.ScanAlbum(childComplexity, args["albumId"].(int), args["onlyNewSubAlbums"].(*bool)), true
 	case "Mutation.scanAll":
 		if e.ComplexityRoot.Mutation.ScanAll == nil {
 			break
@@ -2447,6 +2447,14 @@ func (ec *executionContext) field_Mutation_scanAlbum_args(ctx context.Context, r
 		return nil, err
 	}
 	args["albumId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "onlyNewSubAlbums",
+		func(ctx context.Context, v any) (*bool, error) {
+			return ec.unmarshalOBoolean2ᚖbool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["onlyNewSubAlbums"] = arg1
 	return args, nil
 }
 
@@ -5330,7 +5338,7 @@ func (ec *executionContext) _Mutation_scanAlbum(ctx context.Context, field graph
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().ScanAlbum(ctx, fc.Args["albumId"].(int))
+			return ec.Resolvers.Mutation().ScanAlbum(ctx, fc.Args["albumId"].(int), fc.Args["onlyNewSubAlbums"].(*bool))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next

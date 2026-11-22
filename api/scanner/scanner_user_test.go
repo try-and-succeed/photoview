@@ -148,3 +148,82 @@ func TestFindAlbumsForAlbumKeepsSubAlbumsWhenOneCannotBeRead(t *testing.T) {
 	assert.Equal(t, int64(1), count,
 		"a sub-album must not be deleted just because the scan couldn't read its directory")
 }
+
+// TestFindNewSubAlbumsForAlbum adds a folder next to an existing one: the album
+// itself comes back for its own photos, and of the sub-directories only the new
+// one and what is below it become albums. The existing sub-album is not walked,
+// so a folder added inside it stays unseen, and a sub-album whose directory is
+// gone is not removed.
+func TestFindNewSubAlbumsForAlbum(t *testing.T) {
+	db := test_utils.DatabaseTest(t)
+	test_utils.FilesystemTest(t)
+
+	rootPath := t.TempDir()
+	writeDummyPhoto(t, rootPath, "photo.jpg")
+	root := models.Album{Title: "root", Path: rootPath}
+	assert.NoError(t, db.Save(&root).Error)
+
+	oldPath := filepath.Join(rootPath, "old")
+	assert.NoError(t, os.Mkdir(oldPath, 0o755))
+	writeDummyPhoto(t, oldPath, "photo.jpg")
+	old := models.Album{Title: "old", Path: oldPath, ParentAlbumID: &root.ID}
+	assert.NoError(t, db.Save(&old).Error)
+
+	deeperPath := filepath.Join(oldPath, "deeper")
+	assert.NoError(t, os.Mkdir(deeperPath, 0o755))
+	writeDummyPhoto(t, deeperPath, "photo.jpg")
+
+	vanished := models.Album{Title: "vanished", Path: filepath.Join(rootPath, "vanished"), ParentAlbumID: &root.ID}
+	assert.NoError(t, db.Save(&vanished).Error)
+
+	newPath := filepath.Join(rootPath, "new")
+	innerPath := filepath.Join(newPath, "inner")
+	assert.NoError(t, os.MkdirAll(innerPath, 0o755))
+	writeDummyPhoto(t, innerPath, "photo.jpg")
+
+	emptyPath := filepath.Join(rootPath, "empty")
+	assert.NoError(t, os.Mkdir(emptyPath, 0o755))
+
+	albums, scanErrors := scanner.FindNewSubAlbumsForAlbum(db, &root, scanner_cache.MakeAlbumCache())
+	assert.Empty(t, scanErrors)
+
+	paths := make([]string, len(albums))
+	for i, album := range albums {
+		paths[i] = album.Path
+	}
+	if assert.NotEmpty(t, paths) {
+		assert.Equal(t, rootPath, paths[0], "the album itself comes first, for its own photos")
+	}
+	assert.ElementsMatch(t, []string{rootPath, newPath, innerPath}, paths,
+		"besides the album, only the new folder and what is below it are taken in")
+
+	var created models.Album
+	if assert.NoError(t, db.Where("path = ?", newPath).First(&created).Error) && assert.NotNil(t, created.ParentAlbumID) {
+		assert.Equal(t, root.ID, *created.ParentAlbumID)
+	}
+
+	var count int64
+	assert.NoError(t, db.Model(&models.Album{}).Where("path = ?", deeperPath).Count(&count).Error)
+	assert.Zero(t, count, "an existing sub-album is not walked")
+
+	assert.NoError(t, db.Model(&models.Album{}).Where("id = ?", vanished.ID).Count(&count).Error)
+	assert.Equal(t, int64(1), count, "looking for new folders removes nothing")
+
+	albums, scanErrors = scanner.FindNewSubAlbumsForAlbum(db, &root, scanner_cache.MakeAlbumCache())
+	assert.Empty(t, scanErrors)
+	if assert.Len(t, albums, 1, "a second run finds nothing new") {
+		assert.Equal(t, root.ID, albums[0].ID)
+	}
+}
+
+func TestFindNewSubAlbumsForAlbumReportsAMissingDirectory(t *testing.T) {
+	db := test_utils.DatabaseTest(t)
+	test_utils.FilesystemTest(t)
+
+	gone := models.Album{Title: "gone", Path: filepath.Join(t.TempDir(), "gone")}
+	assert.NoError(t, db.Save(&gone).Error)
+
+	albums, scanErrors := scanner.FindNewSubAlbumsForAlbum(db, &gone, scanner_cache.MakeAlbumCache())
+	assert.NotEmpty(t, scanErrors)
+	assert.Empty(t, albums)
+}

@@ -5,8 +5,8 @@ import { SidebarSection, SidebarSectionTitle } from './SidebarComponents'
 import { scanAlbum, scanAlbumVariables } from './__generated__/scanAlbum'
 
 export const SCAN_ALBUM_MUTATION = gql`
-  mutation scanAlbum($albumId: ID!) {
-    scanAlbum(albumId: $albumId) {
+  mutation scanAlbum($albumId: ID!, $onlyNewSubAlbums: Boolean) {
+    scanAlbum(albumId: $albumId, onlyNewSubAlbums: $onlyNewSubAlbums) {
       success
     }
   }
@@ -65,6 +65,29 @@ export const SidebarAlbumScan = ({ id }: SidebarAlbumScanProps) => {
                     {t(
                       'sidebar.album.scan.rescan',
                       'Rescan this album and its sub-albums'
+                    )}
+                  </span>
+                </button>
+              </td>
+            </tr>
+            <tr className="text-left border-gray-100 dark:border-dark-border2 border-b">
+              <td colSpan={2} className="pl-4 py-2">
+                {/* Cheap: this album's own photos plus the direct sub-folders
+                    that are not albums yet, each with everything below it. */}
+                <button
+                  className="disabled:opacity-50 text-green-500 font-bold uppercase text-xs"
+                  disabled={buttonDisabled || called}
+                  onClick={() => {
+                    setButtonDisabled(true)
+                    scanAlbum({
+                      variables: { albumId: id, onlyNewSubAlbums: true },
+                    })
+                  }}
+                >
+                  <span>
+                    {t(
+                      'sidebar.album.scan.new_sub_albums',
+                      'Rescan this album and new sub-folders only'
                     )}
                   </span>
                 </button>

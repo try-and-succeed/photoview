@@ -7,11 +7,18 @@ import { SidebarAlbumScan, SCAN_ALBUM_MUTATION } from './SidebarAlbumScan'
 
 type Outcome = { result: FetchResult } | { error: Error }
 
-const scanMock = (albumId: string, outcome: Outcome) => {
+const scanMock = (
+  albumId: string,
+  outcome: Outcome,
+  extraVariables: Record<string, unknown> = {}
+) => {
   let calls = 0
 
   const mock: MockedResponse = {
-    request: { query: SCAN_ALBUM_MUTATION, variables: { albumId } },
+    request: {
+      query: SCAN_ALBUM_MUTATION,
+      variables: { albumId, ...extraVariables },
+    },
     // Long enough to look at the button while the request is out.
     delay: 100,
   }
@@ -76,4 +83,27 @@ test('a failed scan request gives the button back', async () => {
   expect(button()).toBeDisabled()
 
   await waitFor(() => expect(button()).toBeEnabled())
+})
+
+test('the second button scans the album and only new sub-folders', async () => {
+  const onlyNew = scanMock('7', success, { onlyNewSubAlbums: true })
+
+  render(
+    <MockedProvider mocks={[onlyNew]} addTypename={false}>
+      <SidebarAlbumScan id="7" />
+    </MockedProvider>
+  )
+
+  const newButton = () =>
+    screen.getByRole('button', {
+      name: 'Rescan this album and new sub-folders only',
+    })
+
+  await userEvent.click(newButton())
+  // One scan at a time, whichever button started it.
+  expect(newButton()).toBeDisabled()
+  expect(button()).toBeDisabled()
+
+  await waitFor(() => expect(onlyNew.called()).toBe(1))
+  await waitFor(() => expect(newButton()).toBeEnabled())
 })

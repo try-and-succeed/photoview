@@ -260,6 +260,7 @@
       },
       "reset_cover": "Reset cover photo",
       "scan": {
+        "new_sub_albums": "Rescan this album and new sub-folders only",
         "rescan": "Rescan this album and its sub-albums",
         "title": "Scanner"
       },

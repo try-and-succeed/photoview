@@ -245,8 +245,25 @@ func AddUserToQueue(user *models.User) error {
 // them to the scanner queue, without touching the rest of the library.
 // Function does not block.
 func AddAlbumToQueue(album *models.Album) error {
+	_, err := queueAlbumsFoundBy(album, scanner.FindAlbumsForAlbum)
+	return err
+}
+
+// AddNewSubAlbumsToQueue adds the given album and those of its direct
+// sub-directories that are not albums yet, each with everything below it, to
+// the scanner queue, and returns how many new albums it found. Existing
+// sub-albums are not scanned. Function does not block.
+func AddNewSubAlbumsToQueue(album *models.Album) (int, error) {
+	queued, err := queueAlbumsFoundBy(album, scanner.FindNewSubAlbumsForAlbum)
+	if queued > 0 {
+		queued-- // the album itself
+	}
+	return queued, err
+}
+
+func queueAlbumsFoundBy(album *models.Album, find func(*gorm.DB, *models.Album, *scanner_cache.AlbumScannerCache) ([]*models.Album, []error)) (int, error) {
 	albumCache := scanner_cache.MakeAlbumCache()
-	albums, album_errors := scanner.FindAlbumsForAlbum(global_scanner_queue.db, album, albumCache)
+	albums, album_errors := find(global_scanner_queue.db, album, albumCache)
 
 	global_scanner_queue.mutex.Lock()
 	for _, album := range albums {
@@ -269,7 +286,7 @@ func AddAlbumToQueue(album *models.Album) error {
 		wrappedErrors[i] = errors.Wrapf(err, "find albums for album (album_id: %d)", album.ID)
 	}
 
-	return stderrors.Join(wrappedErrors...)
+	return len(albums), stderrors.Join(wrappedErrors...)
 }
 
 // Queue should be locked prior to calling this function

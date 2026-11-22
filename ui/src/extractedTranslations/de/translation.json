@@ -260,6 +260,7 @@
       },
       "reset_cover": "Titelbild zurücksetzen",
       "scan": {
+        "new_sub_albums": "",
         "rescan": "",
         "title": ""
       },

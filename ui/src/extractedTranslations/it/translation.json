@@ -260,6 +260,7 @@
       },
       "reset_cover": "Reimposta la foto di copertina",
       "scan": {
+        "new_sub_albums": "",
         "rescan": "",
         "title": ""
       },
