@@ -103,6 +103,7 @@
         "title": "Juntar grupos de cara"
       },
       "move_image_faces": {
+        "confirm_duplicates": "",
         "description": "Mover as imagens selecionadas deste grupo de caras para outro grupo",
         "destination_face_group_table": {
           "move_action": "Mover caras de imagens",

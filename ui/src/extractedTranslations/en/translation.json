@@ -103,6 +103,7 @@
         "title": "Merge Face Groups"
       },
       "move_image_faces": {
+        "confirm_duplicates": "This person is already on one of these photos. Move the faces anyway?",
         "description": "Move selected images of this face group to another face group",
         "destination_face_group_table": {
           "move_action": "Move image faces",

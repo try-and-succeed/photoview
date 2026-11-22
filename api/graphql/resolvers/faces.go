@@ -225,7 +225,7 @@ func (r *mutationResolver) CombineFaceGroups(ctx context.Context, destinationFac
 }
 
 // MoveImageFaces is the resolver for the moveImageFaces field.
-func (r *mutationResolver) MoveImageFaces(ctx context.Context, imageFaceIDs []int, destinationFaceGroupID int) (*models.FaceGroup, error) {
+func (r *mutationResolver) MoveImageFaces(ctx context.Context, imageFaceIDs []int, destinationFaceGroupID int, allowDuplicates *bool) (*models.FaceGroup, error) {
 	db := r.DB(ctx)
 	user := auth.UserFromContext(ctx)
 	if user == nil {
@@ -256,12 +256,14 @@ func (r *mutationResolver) MoveImageFaces(ctx context.Context, imageFaceIDs []in
 			userOwnedImageFaceIDs = append(userOwnedImageFaceIDs, imageFace.ID)
 		}
 
-		hasDuplicateMedia, err := doesFaceGroupContainImages(tx, destFaceGroup.ID, userOwnedImageFaceIDs)
-		if err != nil {
-			return err
-		}
-		if hasDuplicateMedia {
-			return errors.New("cannot move faces because the destination would contain duplicate images")
+		if allowDuplicates == nil || !*allowDuplicates {
+			hasDuplicateMedia, err := doesFaceGroupContainImages(tx, destFaceGroup.ID, userOwnedImageFaceIDs)
+			if err != nil {
+				return err
+			}
+			if hasDuplicateMedia {
+				return errors.New("cannot move faces because the destination would contain duplicate images")
+			}
 		}
 
 		var sourceFaceGroups []*models.FaceGroup

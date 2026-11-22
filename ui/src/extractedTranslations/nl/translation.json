@@ -103,6 +103,7 @@
         "title": "Gezichtsgroepen samenvoegen"
       },
       "move_image_faces": {
+        "confirm_duplicates": "",
         "description": "Verplaats geselecteerde afbeeldingen naar een andere gezichtsgroep",
         "destination_face_group_table": {
           "move_action": "Gezichten verplaatsen",

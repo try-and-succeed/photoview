@@ -103,6 +103,7 @@
         "title": "Slå Ihop Ansiktsgrupper"
       },
       "move_image_faces": {
+        "confirm_duplicates": "",
         "description": "",
         "destination_face_group_table": {
           "move_action": "",

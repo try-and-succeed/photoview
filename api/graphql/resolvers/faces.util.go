@@ -114,7 +114,16 @@ func hasDuplicateMediaInFaceGroupsUnion(db *gorm.DB, faceGroupIDs ...int) (bool,
 	return count > 0, nil
 }
 
+// doesFaceGroupContainImages reports whether moving the given faces into the
+// group would put two of its faces on one photo. Only the photos of the moved
+// faces count: a group that already shows a photo twice elsewhere, such as a
+// photographed album page, may still receive faces.
 func doesFaceGroupContainImages(db *gorm.DB, faceGroupID int, imageFaceIDs []int) (bool, error) {
+	movedMedia := db.
+		Table("image_faces").
+		Select("media_id").
+		Where("id IN ?", imageFaceIDs)
+
 	duplicateMediaQuery := db.
 		Table("image_faces AS candidate").
 		Select("candidate.media_id").
@@ -124,6 +133,7 @@ func doesFaceGroupContainImages(db *gorm.DB, faceGroupID int, imageFaceIDs []int
 			imageFaceIDs,
 			imageFaceIDs,
 		).
+		Where("candidate.media_id IN (?)", movedMedia).
 		Group("candidate.media_id").
 		Having("COUNT(*) > 1")
 

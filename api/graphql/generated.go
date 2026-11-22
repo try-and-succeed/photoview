@@ -151,7 +151,7 @@ type ComplexityRoot struct {
 		DetachImageFaces            func(childComplexity int, imageFaceIDs []int) int
 		FavoriteMedia               func(childComplexity int, mediaID int, favorite bool) int
 		InitialSetupWizard          func(childComplexity int, username string, password string, rootPath string) int
-		MoveImageFaces              func(childComplexity int, imageFaceIDs []int, destinationFaceGroupID int) int
+		MoveImageFaces              func(childComplexity int, imageFaceIDs []int, destinationFaceGroupID int, allowDuplicates *bool) int
 		ProtectShareToken           func(childComplexity int, token string, password *string) int
 		RecognizeUnlabeledFaces     func(childComplexity int) int
 		ResetAlbumCover             func(childComplexity int, albumID int) int
@@ -312,7 +312,7 @@ type MutationResolver interface {
 	SetAlbumCover(ctx context.Context, coverID int) (*models.Album, error)
 	SetFaceGroupLabel(ctx context.Context, faceGroupID int, label *string) (*models.FaceGroup, error)
 	CombineFaceGroups(ctx context.Context, destinationFaceGroupID int, sourceFaceGroupIDs []int) (*models.FaceGroup, error)
-	MoveImageFaces(ctx context.Context, imageFaceIDs []int, destinationFaceGroupID int) (*models.FaceGroup, error)
+	MoveImageFaces(ctx context.Context, imageFaceIDs []int, destinationFaceGroupID int, allowDuplicates *bool) (*models.FaceGroup, error)
 	RecognizeUnlabeledFaces(ctx context.Context) ([]*models.ImageFace, error)
 	DetachImageFaces(ctx context.Context, imageFaceIDs []int) (*models.FaceGroup, error)
 	FavoriteMedia(ctx context.Context, mediaID int, favorite bool) (*models.Media, error)
@@ -900,7 +900,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.MoveImageFaces(childComplexity, args["imageFaceIDs"].([]int), args["destinationFaceGroupID"].(int)), true
+		return e.ComplexityRoot.Mutation.MoveImageFaces(childComplexity, args["imageFaceIDs"].([]int), args["destinationFaceGroupID"].(int), args["allowDuplicates"].(*bool)), true
 	case "Mutation.protectShareToken":
 		if e.ComplexityRoot.Mutation.ProtectShareToken == nil {
 			break
@@ -2384,6 +2384,14 @@ func (ec *executionContext) field_Mutation_moveImageFaces_args(ctx context.Conte
 		return nil, err
 	}
 	args["destinationFaceGroupID"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "allowDuplicates",
+		func(ctx context.Context, v any) (*bool, error) {
+			return ec.unmarshalOBoolean2ᚖbool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["allowDuplicates"] = arg2
 	return args, nil
 }
 
@@ -4985,7 +4993,7 @@ func (ec *executionContext) _Mutation_moveImageFaces(ctx context.Context, field 
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().MoveImageFaces(ctx, fc.Args["imageFaceIDs"].([]int), fc.Args["destinationFaceGroupID"].(int))
+			return ec.Resolvers.Mutation().MoveImageFaces(ctx, fc.Args["imageFaceIDs"].([]int), fc.Args["destinationFaceGroupID"].(int), fc.Args["allowDuplicates"].(*bool))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next

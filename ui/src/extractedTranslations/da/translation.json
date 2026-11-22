@@ -103,6 +103,7 @@
         "title": "Vælg gruppe at flette med"
       },
       "move_image_faces": {
+        "confirm_duplicates": "",
         "description": "Flyt valgte billeder fra denne gruppe til en anden gruppe",
         "destination_face_group_table": {
           "move_action": "Flyt ansigter",

@@ -22,11 +22,16 @@ import {
 import { useTranslation } from 'react-i18next'
 import Modal, { ModalAction } from '../../../primitives/Modal'
 
-const MOVE_IMAGE_FACES_MUTATION = gql`
-  mutation moveImageFaces($faceIDs: [ID!]!, $destFaceGroupID: ID!) {
+export const MOVE_IMAGE_FACES_MUTATION = gql`
+  mutation moveImageFaces(
+    $faceIDs: [ID!]!
+    $destFaceGroupID: ID!
+    $allowDuplicates: Boolean
+  ) {
     moveImageFaces(
       imageFaceIDs: $faceIDs
       destinationFaceGroupID: $destFaceGroupID
+      allowDuplicates: $allowDuplicates
     ) {
       id
       imageFaces {
@@ -101,7 +106,7 @@ const MoveImageFacesModal = ({
 
   if (open == false) return null
 
-  const moveImageFaces = () => {
+  const moveImageFaces = (allowDuplicates = false) => {
     const faceIDs = selectedImageFaces.map(face => face.id)
 
     if (isNil(selectedFaceGroup)) {
@@ -112,11 +117,30 @@ const MoveImageFacesModal = ({
       variables: {
         faceIDs,
         destFaceGroupID: selectedFaceGroup.id,
+        allowDuplicates,
       },
-    }).then(() => {
-      setOpen(false)
-      navigate(`/people/${selectedFaceGroup.id}`)
     })
+      .then(() => {
+        setOpen(false)
+        navigate(`/people/${selectedFaceGroup.id}`)
+      })
+      .catch((error: Error) => {
+        // A person can be on a photo twice, for example on a photographed
+        // album page, so the server only refuses this unless asked to.
+        if (allowDuplicates || !error.message.includes('duplicate images')) {
+          throw error
+        }
+        if (
+          confirm(
+            t(
+              'people_page.modal.move_image_faces.confirm_duplicates',
+              'This person is already on one of these photos. Move the faces anyway?'
+            )
+          )
+        ) {
+          moveImageFaces(true)
+        }
+      })
   }
 
   const imageFaces = faceGroup.imageFaces

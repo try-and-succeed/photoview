@@ -103,6 +103,7 @@
         "title": "Unisci immagini volto"
       },
       "move_image_faces": {
+        "confirm_duplicates": "",
         "description": "Sposta le immagini selezionate di questo volto in un altro volto",
         "destination_face_group_table": {
           "move_action": "Muovi immagini",

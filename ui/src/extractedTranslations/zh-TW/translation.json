@@ -103,6 +103,7 @@
         "title": "合併人臉群組"
       },
       "move_image_faces": {
+        "confirm_duplicates": "",
         "description": "將此人臉群組中選取的相片移至其他人臉群組",
         "destination_face_group_table": {
           "move_action": "移動相片中的人臉",

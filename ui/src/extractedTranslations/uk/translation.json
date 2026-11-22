@@ -103,6 +103,7 @@
         "title": "Об’єднати групи обличь"
       },
       "move_image_faces": {
+        "confirm_duplicates": "",
         "description": "Перемістити вибрані світлини цієї групи обличь до іншої групи обличь",
         "destination_face_group_table": {
           "move_action": "Перемістити світлини обличь",
