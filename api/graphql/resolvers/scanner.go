@@ -119,7 +119,7 @@ func (r *mutationResolver) CancelAllScanJobs(ctx context.Context) (int, error) {
 }
 
 // ScanAlbum is the resolver for the scanAlbum field.
-func (r *mutationResolver) ScanAlbum(ctx context.Context, albumID int) (*models.ScannerResult, error) {
+func (r *mutationResolver) ScanAlbum(ctx context.Context, albumID int, onlyNewSubAlbums *bool) (*models.ScannerResult, error) {
 	db := r.DB(ctx)
 
 	user := auth.UserFromContext(ctx)
@@ -140,6 +140,21 @@ func (r *mutationResolver) ScanAlbum(ctx context.Context, albumID int) (*models.
 		if !ownsAlbum {
 			return nil, auth.ErrUnauthorized
 		}
+	}
+
+	if onlyNewSubAlbums != nil && *onlyNewSubAlbums {
+		newAlbums, scanErr := addNewSubAlbumsToQueue(&album)
+
+		message := fmt.Sprintf("Scanner started, %d new sub-albums found", newAlbums)
+		if scanErr != nil {
+			message = fmt.Sprintf("%s, some albums could not be queued: %v", message, scanErr)
+		}
+
+		return &models.ScannerResult{
+			Finished: false,
+			Success:  scanErr == nil,
+			Message:  &message,
+		}, nil
 	}
 
 	scanErr := addAlbumToQueue(&album)

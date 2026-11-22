@@ -7,6 +7,10 @@ package resolvers
 
 import "github.com/photoview/photoview/api/scanner/scanner_queue"
 
+// addNewSubAlbumsToQueue is a seam over scanner_queue.AddNewSubAlbumsToQueue,
+// for the same reason as addAlbumToQueue below.
+var addNewSubAlbumsToQueue = scanner_queue.AddNewSubAlbumsToQueue
+
 // addAlbumToQueue is a seam over scanner_queue.AddAlbumToQueue so tests can
 // exercise ScanAlbum's permission checks without touching the real,
 // process-global scanner queue, which starts a background worker goroutine

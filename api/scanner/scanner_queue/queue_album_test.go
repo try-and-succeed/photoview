@@ -115,3 +115,29 @@ func TestAddAlbumToQueueQueuesWhatItCouldRead(t *testing.T) {
 		"an album the scanner could read belongs on the queue even when another one failed")
 	assert.Contains(t, queuedPaths(), rootPath)
 }
+
+func TestAddNewSubAlbumsToQueueQueuesTheAlbumAndNewFolders(t *testing.T) {
+	db := test_utils.DatabaseTest(t)
+	test_utils.FilesystemTest(t)
+	useTestQueue(t, db)
+
+	rootPath := t.TempDir()
+	writePhoto(t, rootPath)
+	root := models.Album{Title: "root", Path: rootPath}
+	require.NoError(t, db.Save(&root).Error)
+
+	oldPath := filepath.Join(rootPath, "old")
+	writePhoto(t, oldPath)
+	require.NoError(t, db.Save(&models.Album{Title: "old", Path: oldPath, ParentAlbumID: &root.ID}).Error)
+
+	newPath := filepath.Join(rootPath, "new")
+	writePhoto(t, newPath)
+	writePhoto(t, filepath.Join(newPath, "inner"))
+
+	queued, err := AddNewSubAlbumsToQueue(&root)
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, queued, "two new albums, the album itself not counted")
+	assert.Equal(t, []string{rootPath, newPath, filepath.Join(newPath, "inner")}, queuedPaths(),
+		"the album itself and the new folders are scanned, the existing sub-album is not")
+}

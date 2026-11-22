@@ -327,6 +327,7 @@
       },
       "reset_cover": "Скинути обкладинку",
       "scan": {
+        "new_sub_albums": "",
         "rescan": "",
         "title": ""
       },

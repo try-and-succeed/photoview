@@ -325,6 +325,7 @@
       },
       "reset_cover": "",
       "scan": {
+        "new_sub_albums": "",
         "rescan": "",
         "title": ""
       },

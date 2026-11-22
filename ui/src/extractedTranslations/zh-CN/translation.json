@@ -324,6 +324,7 @@
       },
       "reset_cover": "重设封面照片",
       "scan": {
+        "new_sub_albums": "",
         "rescan": "",
         "title": ""
       },

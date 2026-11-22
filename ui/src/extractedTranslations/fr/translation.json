@@ -326,6 +326,7 @@
       },
       "reset_cover": "Réinitialiser la photo de couverture",
       "scan": {
+        "new_sub_albums": "",
         "rescan": "",
         "title": ""
       },
