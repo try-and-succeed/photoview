@@ -69,7 +69,7 @@
     "action_label": {
       "change_label": "Змінити мітку",
       "detach_images": "Від’єднати обличчя",
-      "merge_face": "",
+      "merge_face": "Обʼєднати обличчя",
       "merge_people": "Обʼєднати обличчя",
       "move_faces": "Перемістити обличчя"
     },
@@ -81,7 +81,7 @@
     "modal": {
       "action": {
         "merge": "Обʼєднати",
-        "next": ""
+        "next": "Далі"
       },
       "detach_image_faces": {
         "action": {
