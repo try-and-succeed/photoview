@@ -239,18 +239,6 @@ func (fd *faceDetector) MergeImageFaces(imageFaceIDs []int, destFaceGroupID int3
 }
 
 func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) ([]*models.ImageFace, error) {
-	unrecognizedDescriptors := make([]face.Descriptor, 0)
-	unrecognizedFaceGroupIDs := make([]int32, 0)
-	unrecognizedImageFaceIDs := make([]int, 0)
-
-	asideFaceGroupIDs := make([]int32, 0)
-	asideDescriptors := make([]face.Descriptor, 0)
-	asideImageFaceIDs := make([]int, 0)
-
-	newFaceGroupIDs := make([]int32, 0)
-	newDescriptors := make([]face.Descriptor, 0)
-	newImageFaceIDs := make([]int, 0)
-
 	var unlabeledFaceGroups []*models.FaceGroup
 
 	err := tx.
@@ -299,59 +287,79 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 		occupied[groupPhoto{face.FaceGroupID, face.MediaID}] = true
 	}
 
+	// Labeled means named, whoever's albums the group is on: a face is never
+	// moved into a group without a name.
+	var labeledFaceGroupIDs []int
+	if err := tx.Model(&models.FaceGroup{}).Where("label IS NOT NULL").Pluck("id", &labeledFaceGroupIDs).Error; err != nil {
+		return nil, err
+	}
+	labeled := make(map[int32]bool, len(labeledFaceGroupIDs))
+	for _, id := range labeledFaceGroupIDs {
+		labeled[int32(id)] = true
+	}
+	candidateGroups := make(map[int32]bool, len(unlabeledFaceGroups))
+	for _, faceGroup := range unlabeledFaceGroups {
+		candidateGroups[int32(faceGroup.ID)] = true
+	}
+
 	fd.mutex.Lock()
 	defer fd.mutex.Unlock()
 
+	// The references, fixed for the whole run so that a face placed here
+	// does not pull in the next one:
+	//
+	//   - of a person, only the faces a user confirmed. A face the detector
+	//     or an earlier run placed may be wrong, and as a reference one wrong
+	//     face pulls in more strangers with every run.
+	//   - every unlabeled face. They cannot win a face for themselves, but
+	//     they vote: a stranger whose nearest faces are other photos of that
+	//     stranger stays where it is, even when a confirmed face of a person
+	//     is within the tolerance too. Without them, a person with only a
+	//     few confirmed faces gets every similar stranger, which happens
+	//     especially with children.
+	references := make([]Reference, 0, len(fd.faceDescriptors))
+	referenceIndex := make(map[int]int)
+	candidates := make([]int, 0)
 	for i := range fd.faceDescriptors {
-		descriptor := fd.faceDescriptors[i]
 		faceGroupID := fd.faceGroupIDs[i]
 		imageFaceID := fd.imageFaceIDs[i]
 
-		isUnlabeled := false
-		for _, unlabeledFaceGroup := range unlabeledFaceGroups {
-			if faceGroupID == int32(unlabeledFaceGroup.ID) {
-				isUnlabeled = true
-				continue
+		if labeled[faceGroupID] {
+			if verified[imageFaceID] {
+				references = append(references, Reference{FaceGroupID: int(faceGroupID), Descriptor: models.FaceDescriptor(fd.faceDescriptors[i])})
 			}
+			continue
 		}
 
-		if isUnlabeled && verified[imageFaceID] {
-			// Neither moved nor a reference: references are labeled faces.
-			asideFaceGroupIDs = append(asideFaceGroupIDs, faceGroupID)
-			asideDescriptors = append(asideDescriptors, descriptor)
-			asideImageFaceIDs = append(asideImageFaceIDs, imageFaceID)
-		} else if isUnlabeled {
-			unrecognizedFaceGroupIDs = append(unrecognizedFaceGroupIDs, faceGroupID)
-			unrecognizedDescriptors = append(unrecognizedDescriptors, descriptor)
-			unrecognizedImageFaceIDs = append(unrecognizedImageFaceIDs, imageFaceID)
-		} else {
-			newFaceGroupIDs = append(newFaceGroupIDs, faceGroupID)
-			newDescriptors = append(newDescriptors, descriptor)
-			newImageFaceIDs = append(newImageFaceIDs, imageFaceID)
+		referenceIndex[imageFaceID] = len(references)
+		references = append(references, Reference{FaceGroupID: int(faceGroupID), Descriptor: models.FaceDescriptor(fd.faceDescriptors[i])})
+
+		// A face a person confirmed is never moved automatically.
+		if candidateGroups[faceGroupID] && !verified[imageFaceID] {
+			candidates = append(candidates, i)
 		}
 	}
-
-	fd.faceGroupIDs = newFaceGroupIDs
-	fd.faceDescriptors = newDescriptors
-	fd.imageFaceIDs = newImageFaceIDs
-
-	// Classify against the labeled faces only, and keep that reference set
-	// for the whole run: a face placed here must not pull in the next one,
-	// or one wrong match chains into many.
-	fd.applySamplesLocked()
-	defer fd.applySamplesLocked()
 
 	updatedImageFaces := make([]*models.ImageFace, 0)
 	sourceFaceGroupIDs := make(map[int32]bool)
 
-	for i := range unrecognizedDescriptors {
-		descriptor := unrecognizedDescriptors[i]
-		faceGroupID := unrecognizedFaceGroupIDs[i]
-		imageFaceID := unrecognizedImageFaceIDs[i]
+	last := len(references) - 1
+	for _, i := range candidates {
+		faceGroupID := fd.faceGroupIDs[i]
+		imageFaceID := fd.imageFaceIDs[i]
 
-		match := fd.classifyDescriptor(descriptor)
+		// A face does not vote for itself: swap it to the end and leave it
+		// out, then put it back.
+		self := referenceIndex[imageFaceID]
+		references[self], references[last] = references[last], references[self]
+		match := ClassifyByVote(references[:last], models.FaceDescriptor(fd.faceDescriptors[i]), DefaultTolerance)
+		references[self], references[last] = references[last], references[self]
 
-		if match >= 0 && occupied[groupPhoto{int(match), mediaOf[imageFaceID]}] {
+		if match < 0 || !labeled[int32(match)] {
+			continue
+		}
+
+		if occupied[groupPhoto{match, mediaOf[imageFaceID]}] {
 			// The person is on this photo already: leave the face where it
 			// is, up for review.
 			if err := tx.Model(&models.ImageFace{}).Where("id = ?", imageFaceID).Updates(map[string]any{
@@ -360,43 +368,41 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 			}).Error; err != nil {
 				return nil, err
 			}
-			match = -1
+			continue
 		}
 
-		if match < 0 {
-			// still no match, we can readd it to the list
-			fd.faceGroupIDs = append(fd.faceGroupIDs, faceGroupID)
-			fd.faceDescriptors = append(fd.faceDescriptors, descriptor)
-			fd.imageFaceIDs = append(fd.imageFaceIDs, imageFaceID)
-		} else {
-			// found new match, update the database
-			var imageFace models.ImageFace
-			if err := tx.First(&imageFace, imageFaceID).Error; err != nil {
-				return nil, err
-			}
-
-			// Placed by a run, so up for review.
-			if err := tx.Model(&imageFace).Updates(map[string]any{
-				"face_group_id": int(match),
-				"assigned_by":   models.FaceAssignmentReclassify,
-				"needs_review":  true,
-			}).Error; err != nil {
-				return nil, err
-			}
-
-			updatedImageFaces = append(updatedImageFaces, &imageFace)
-			sourceFaceGroupIDs[faceGroupID] = true
-			occupied[groupPhoto{int(match), imageFace.MediaID}] = true
-
-			fd.faceGroupIDs = append(fd.faceGroupIDs, match)
-			fd.faceDescriptors = append(fd.faceDescriptors, descriptor)
-			fd.imageFaceIDs = append(fd.imageFaceIDs, imageFaceID)
+		var imageFace models.ImageFace
+		if err := tx.First(&imageFace, imageFaceID).Error; err != nil {
+			return nil, err
 		}
+
+		// Placed by a run, so up for review.
+		if err := tx.Model(&imageFace).Updates(map[string]any{
+			"face_group_id": match,
+			"assigned_by":   models.FaceAssignmentReclassify,
+			"needs_review":  true,
+		}).Error; err != nil {
+			return nil, err
+		}
+
+		updatedImageFaces = append(updatedImageFaces, &imageFace)
+		sourceFaceGroupIDs[faceGroupID] = true
+		occupied[groupPhoto{match, imageFace.MediaID}] = true
 	}
 
-	fd.faceGroupIDs = append(fd.faceGroupIDs, asideFaceGroupIDs...)
-	fd.faceDescriptors = append(fd.faceDescriptors, asideDescriptors...)
-	fd.imageFaceIDs = append(fd.imageFaceIDs, asideImageFaceIDs...)
+	// The recognizer that classifies newly scanned faces sees the outcome.
+	if len(updatedImageFaces) > 0 {
+		moved := make(map[int]int32, len(updatedImageFaces))
+		for _, imageFace := range updatedImageFaces {
+			moved[imageFace.ID] = int32(imageFace.FaceGroupID)
+		}
+		for i, imageFaceID := range fd.imageFaceIDs {
+			if group, ok := moved[imageFaceID]; ok {
+				fd.faceGroupIDs[i] = group
+			}
+		}
+		fd.applySamplesLocked()
+	}
 
 	// The unlabeled groups whose faces all found their person are empty now.
 	for faceGroupID := range sourceFaceGroupIDs {
