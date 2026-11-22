@@ -78,7 +78,7 @@ func TestMoveAndDetachSetFaceFlags(t *testing.T) {
 		r, ctx, _ := setupVerifyTest(t)
 		setFaceFlags(t, r, []int{4}, map[string]any{"needs_review": true, "assigned_by": models.FaceAssignmentReclassify})
 
-		if _, err := r.MoveImageFaces(ctx, []int{4}, 2); err != nil {
+		if _, err := r.MoveImageFaces(ctx, []int{4}, 2, nil); err != nil {
 			t.Fatal("MoveImageFaces error:", err)
 		}
 
