@@ -17,12 +17,7 @@ var ErrFaceDetectorNotInitialized = errors.New("face detector not initialized")
 
 func userOwnedFaceGroup(db *gorm.DB, user *models.User, faceGroupID int) (*models.FaceGroup, error) {
 	if user.Admin {
-		var faceGroup models.FaceGroup
-		if err := db.Where("id = ?", faceGroupID).Find(&faceGroup).Error; err != nil {
-			return nil, err
-		}
-
-		return &faceGroup, nil
+		return firstFaceGroup(db.Model(&models.FaceGroup{}).Where("id = ?", faceGroupID))
 	}
 
 	if err := user.FillAlbums(db); err != nil {
@@ -47,10 +42,19 @@ func userOwnedFaceGroup(db *gorm.DB, user *models.User, faceGroupID int) (*model
 		Where("face_groups.id = ?", faceGroupID).
 		Where(imageFacesIDInQuestion, imageFaceQuery)
 
+	return firstFaceGroup(faceGroupQuery)
+}
+
+var ErrFaceGroupNotFound = errors.New("face group does not exist or is not owned by the user")
+
+// firstFaceGroup runs the query with First, not Find: Find reports no error
+// when nothing matches and leaves an empty group with ID 0, which the
+// mutations would then write to.
+func firstFaceGroup(query *gorm.DB) (*models.FaceGroup, error) {
 	var faceGroup models.FaceGroup
-	if err := faceGroupQuery.Find(&faceGroup).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("face group does not exist or is not owned by the user: %w", err)
+	if err := query.First(&faceGroup).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrFaceGroupNotFound
 		}
 		return nil, err
 	}
