@@ -329,6 +329,44 @@ func recognizeUnlabeled(t *testing.T, f *detectorFixture, detector *faceDetector
 	return updated
 }
 
+func TestRecognizeUnlabeledFacesKeepsOnePersonPerPhoto(t *testing.T) {
+	f := setupDetectorTest(t)
+	anna := "Anna"
+	labeled := f.group(t, &anna)
+	f.face(t, labeled, 0, descriptorAt(base))
+
+	// Photo 1 shows Anna already; photo 3 holds two faces like hers.
+	sharedGroup, firstGroup, secondGroup := f.group(t, nil), f.group(t, nil), f.group(t, nil)
+	shared := f.face(t, sharedGroup, 0, descriptorAt(base+step))
+	first := f.face(t, firstGroup, 2, descriptorAt(base-step))
+	second := f.face(t, secondGroup, 2, descriptorAt(base+step))
+
+	detector := f.initialize(t)
+	updated := recognizeUnlabeled(t, f, detector)
+
+	if len(updated) != 1 || updated[0].ID != first.ID {
+		t.Fatalf("updated faces = %+v, want only face %d", updated, first.ID)
+	}
+
+	load := func(id int) models.ImageFace {
+		var face models.ImageFace
+		if err := f.db.First(&face, id).Error; err != nil {
+			t.Fatal(err)
+		}
+		return face
+	}
+	if face := load(first.ID); face.FaceGroupID != labeled.ID || !face.NeedsReview {
+		t.Errorf("face %d = group %d, review %v; want group %d, review", first.ID, face.FaceGroupID, face.NeedsReview, labeled.ID)
+	}
+	for id, group := range map[int]int{shared.ID: sharedGroup.ID, second.ID: secondGroup.ID} {
+		face := load(id)
+		if face.FaceGroupID != group || !face.NeedsReview || face.AssignedBy != models.FaceAssignmentReclassify {
+			t.Errorf("face %d = group %d, %s, review %v; want it to stay in group %d, RECLASSIFY, review",
+				id, face.FaceGroupID, face.AssignedBy, face.NeedsReview, group)
+		}
+	}
+}
+
 func TestRecognizeUnlabeledFacesRespectsVerification(t *testing.T) {
 	t.Run("leaves a confirmed face alone and flags the faces it moves", func(t *testing.T) {
 		f := setupDetectorTest(t)

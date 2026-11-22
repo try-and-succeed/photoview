@@ -289,6 +289,29 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 		verified[id] = true
 	}
 
+	// Which groups are on the photos of the unlabeled faces already. A run
+	// does not put a second face of a person on one photo; a person can be
+	// there twice, but only a user can tell, so such a face is flagged.
+	type groupPhoto struct{ faceGroupID, mediaID int }
+	var onPhotos []struct{ ID, FaceGroupID, MediaID int }
+	if err := tx.
+		Table("image_faces").
+		Select("id, face_group_id, media_id").
+		Where("media_id IN (?)", tx.
+			Table("image_faces").
+			Select("image_faces.media_id").
+			Joins("JOIN face_groups ON face_groups.id = image_faces.face_group_id").
+			Where("face_groups.label IS NULL")).
+		Scan(&onPhotos).Error; err != nil {
+		return nil, err
+	}
+	mediaOf := make(map[int]int, len(onPhotos))
+	occupied := make(map[groupPhoto]bool, len(onPhotos))
+	for _, face := range onPhotos {
+		mediaOf[face.ID] = face.MediaID
+		occupied[groupPhoto{face.FaceGroupID, face.MediaID}] = true
+	}
+
 	fd.mutex.Lock()
 	defer fd.mutex.Unlock()
 
@@ -341,6 +364,18 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 
 		match := fd.classifyDescriptor(descriptor)
 
+		if match >= 0 && occupied[groupPhoto{int(match), mediaOf[imageFaceID]}] {
+			// The person is on this photo already: leave the face where it
+			// is, up for review.
+			if err := tx.Model(&models.ImageFace{}).Where("id = ?", imageFaceID).Updates(map[string]any{
+				"assigned_by":  models.FaceAssignmentReclassify,
+				"needs_review": true,
+			}).Error; err != nil {
+				return nil, err
+			}
+			match = -1
+		}
+
 		if match < 0 {
 			// still no match, we can readd it to the list
 			fd.faceGroupIDs = append(fd.faceGroupIDs, faceGroupID)
@@ -364,6 +399,7 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 
 			updatedImageFaces = append(updatedImageFaces, &imageFace)
 			sourceFaceGroupIDs[faceGroupID] = true
+			occupied[groupPhoto{int(match), imageFace.MediaID}] = true
 
 			fd.faceGroupIDs = append(fd.faceGroupIDs, match)
 			fd.faceDescriptors = append(fd.faceDescriptors, descriptor)
