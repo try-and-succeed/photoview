@@ -141,6 +141,7 @@
         "title": "Обьединить группы лиц"
       },
       "move_image_faces": {
+        "confirm_duplicates": "",
         "description": "Переместить выбранные фото из текущей группы в другую группу с лицами.",
         "destination_face_group_table": {
           "move_action": "Переместить фото с лицами",

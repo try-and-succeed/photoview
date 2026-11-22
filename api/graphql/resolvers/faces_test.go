@@ -410,7 +410,7 @@ func TestMoveImageFaces(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		result, err := r.MoveImageFaces(ctx, []int{1}, 2)
+		result, err := r.MoveImageFaces(ctx, []int{1}, 2, nil)
 		if err != nil {
 			t.Fatal("MoveImageFaces failed:", err)
 		}
@@ -439,7 +439,7 @@ func TestMoveImageFaces(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		result, err := r.MoveImageFaces(ctx, []int{1}, 2)
+		result, err := r.MoveImageFaces(ctx, []int{1}, 2, nil)
 		if err == nil {
 			t.Fatal("expected MoveImageFaces to reject duplicate media, got nil error")
 		}
@@ -472,7 +472,7 @@ func TestMoveImageFaces(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		result, err := r.MoveImageFaces(ctx, []int{1, 2}, 2)
+		result, err := r.MoveImageFaces(ctx, []int{1, 2}, 2, nil)
 		if err == nil {
 			t.Fatal("expected MoveImageFaces to reject duplicate selected media, got nil error")
 		}
@@ -481,6 +481,60 @@ func TestMoveImageFaces(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "duplicate images") {
 			t.Fatalf("expected duplicate image validation error, got: %v", err)
+		}
+	})
+
+	t.Run("moves into a group that shows another photo twice", func(t *testing.T) {
+		r, ctx, _ := setupFaceMutationTest(t)
+		createFaceMutationFixtures(t, r)
+
+		// Group 2 is twice on photo 3, like on a photographed album page.
+		testDataList := []models.ImageFace{
+			{Model: models.Model{ID: 1}, FaceGroupID: 1, MediaID: 1},
+			{Model: models.Model{ID: 2}, FaceGroupID: 2, MediaID: 3},
+			{Model: models.Model{ID: 3}, FaceGroupID: 2, MediaID: 3},
+		}
+		if err := r.database.Create(&testDataList).Error; err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := r.MoveImageFaces(ctx, []int{1}, 2, nil); err != nil {
+			t.Fatal("MoveImageFaces failed:", err)
+		}
+
+		var movedFace models.ImageFace
+		if err := r.database.First(&movedFace, 1).Error; err != nil {
+			t.Fatal(err)
+		}
+		if movedFace.FaceGroupID != 2 {
+			t.Fatalf("expected image face to move to group 2, got group %d", movedFace.FaceGroupID)
+		}
+	})
+
+	t.Run("allowDuplicates moves onto a photo the destination already shows", func(t *testing.T) {
+		r, ctx, _ := setupFaceMutationTest(t)
+		createFaceMutationFixtures(t, r)
+
+		testDataList := []models.ImageFace{
+			{Model: models.Model{ID: 1}, FaceGroupID: 1, MediaID: 1},
+			{Model: models.Model{ID: 2}, FaceGroupID: 3, MediaID: 1},
+			{Model: models.Model{ID: 3}, FaceGroupID: 2, MediaID: 1},
+		}
+		if err := r.database.Create(&testDataList).Error; err != nil {
+			t.Fatal(err)
+		}
+
+		allow := true
+		if _, err := r.MoveImageFaces(ctx, []int{1, 2}, 2, &allow); err != nil {
+			t.Fatal("MoveImageFaces with allowDuplicates failed:", err)
+		}
+
+		var count int64
+		if err := r.database.Model(&models.ImageFace{}).Where("face_group_id = ? AND media_id = ?", 2, 1).Count(&count).Error; err != nil {
+			t.Fatal(err)
+		}
+		if count != 3 {
+			t.Fatalf("expected group 2 to hold all 3 faces of photo 1, got %d", count)
 		}
 	})
 
@@ -497,7 +551,7 @@ func TestMoveImageFaces(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		result, err := r.MoveImageFaces(ctx, []int{1}, 2)
+		result, err := r.MoveImageFaces(ctx, []int{1}, 2, nil)
 		if err != nil {
 			t.Fatal("MoveImageFaces failed for non-admin user:", err)
 		}

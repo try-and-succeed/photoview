@@ -141,6 +141,7 @@
         "title": "合併臉孔群組"
       },
       "move_image_faces": {
+        "confirm_duplicates": "",
         "description": "移動已選擇的臉孔群組到另一個面孔群組",
         "destination_face_group_table": {
           "move_action": "移動相片的面孔",

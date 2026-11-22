@@ -141,6 +141,7 @@
         "title": "Personen zusammenführen"
       },
       "move_image_faces": {
+        "confirm_duplicates": "Diese Person ist schon auf einem dieser Fotos. Die Gesichter trotzdem verschieben?",
         "description": "Verschiebe ausgewählte Bilder in eine andere Person",
         "destination_face_group_table": {
           "move_action": "Verschiebe",

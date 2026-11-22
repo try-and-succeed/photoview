@@ -141,6 +141,7 @@
         "title": "Połącz grupy twarzy"
       },
       "move_image_faces": {
+        "confirm_duplicates": "",
         "description": "Przenieś wybrane obrazy tej grupy twarzy do innej grupy twarzy",
         "destination_face_group_table": {
           "move_action": "Przenieś twarze z obrazu",

@@ -20,7 +20,10 @@ export interface moveImageFaces_moveImageFaces {
 
 export interface moveImageFaces {
   /**
-   * Move a list of ImageFaces to another face group
+   * Move a list of ImageFaces to another face group. It fails when the group
+   * would then hold two faces on one of the moved faces' photos, unless
+   * allowDuplicates is set: a person can appear twice on a photo, for example on
+   * a photographed album page or a sheet of passport pictures.
    */
   moveImageFaces: moveImageFaces_moveImageFaces;
 }
@@ -28,4 +31,5 @@ export interface moveImageFaces {
 export interface moveImageFacesVariables {
   faceIDs: string[];
   destFaceGroupID: string;
+  allowDuplicates?: boolean | null;
 }

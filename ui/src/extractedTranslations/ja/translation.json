@@ -141,6 +141,7 @@
         "title": "顔グループを統合"
       },
       "move_image_faces": {
+        "confirm_duplicates": "",
         "description": "この顔グループの選択した写真を別の顔グループに移動します",
         "destination_face_group_table": {
           "move_action": "写真の顔グループを移動",

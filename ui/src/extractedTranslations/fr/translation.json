@@ -141,6 +141,7 @@
         "title": "Fusionner des groupes de visages"
       },
       "move_image_faces": {
+        "confirm_duplicates": "",
         "description": "Déplacer les images sélectionnées de ce groupe de visages vers un autre groupe de visages",
         "destination_face_group_table": {
           "move_action": "Déplacer les visages de l'image",

@@ -141,6 +141,7 @@
         "title": "合并面孔组"
       },
       "move_image_faces": {
+        "confirm_duplicates": "",
         "description": "将该组面孔中选择的照片移动到另一组面孔",
         "destination_face_group_table": {
           "move_action": "移动照片",
