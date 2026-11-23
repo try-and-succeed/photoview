@@ -494,21 +494,6 @@ func (r *mutationResolver) SetImageFacesVerified(ctx context.Context, imageFaceI
 	return setUserOwnedImageFacesVerified(db, user, imageFaceIDs, verified)
 }
 
-// SetImageFacesNeedsReview is the resolver for the setImageFacesNeedsReview field.
-func (r *mutationResolver) SetImageFacesNeedsReview(ctx context.Context, imageFaceIDs []int, needsReview bool) ([]*models.ImageFace, error) {
-	db := r.DB(ctx)
-	user := auth.UserFromContext(ctx)
-	if user == nil {
-		return nil, errors.New("unauthorized")
-	}
-
-	if face_detection.GlobalFaceDetector == nil {
-		return nil, ErrFaceDetectorNotInitialized
-	}
-
-	return setUserOwnedImageFacesNeedsReview(db, user, imageFaceIDs, needsReview)
-}
-
 // ReclassifyFaceGroups is the resolver for the reclassifyFaceGroups field.
 func (r *mutationResolver) ReclassifyFaceGroups(ctx context.Context, faceGroupIDs []int, dryRun bool, tolerance *float64) (*models.ReclassifyResult, error) {
 	db := r.DB(ctx)
@@ -522,6 +507,21 @@ func (r *mutationResolver) ReclassifyFaceGroups(ctx context.Context, faceGroupID
 	}
 
 	return reclassifyFaceGroups(db, user, faceGroupIDs, dryRun, tolerance)
+}
+
+// SetImageFacesNeedsReview is the resolver for the setImageFacesNeedsReview field.
+func (r *mutationResolver) SetImageFacesNeedsReview(ctx context.Context, imageFaceIDs []int, needsReview bool) ([]*models.ImageFace, error) {
+	db := r.DB(ctx)
+	user := auth.UserFromContext(ctx)
+	if user == nil {
+		return nil, errors.New("unauthorized")
+	}
+
+	if face_detection.GlobalFaceDetector == nil {
+		return nil, ErrFaceDetectorNotInitialized
+	}
+
+	return setUserOwnedImageFacesNeedsReview(db, user, imageFaceIDs, needsReview)
 }
 
 // MyFaceGroups is the resolver for the myFaceGroups field.
