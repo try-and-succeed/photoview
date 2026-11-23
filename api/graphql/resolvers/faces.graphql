@@ -150,4 +150,7 @@ extend type Mutation {
   `tolerance` is compared with the squared distance between faces, as during a scan (default 0.2).
   """
   reclassifyFaceGroups(faceGroupIDs: [ID!]!, dryRun: Boolean!, tolerance: Float): ReclassifyResult! @isAuthorized
+
+  "Flag single faces for review, or clear the flag. Leaves `verified`, `assignedBy` and the face's group unchanged."
+  setImageFacesNeedsReview(imageFaceIDs: [ID!]!, needsReview: Boolean!): [ImageFace!]! @isAuthorized
 }

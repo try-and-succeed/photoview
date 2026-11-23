@@ -261,6 +261,138 @@ func TestFaceGroupVerificationFields(t *testing.T) {
 	})
 }
 
+func TestSetFacesNeedsReview(t *testing.T) {
+	reviewList := func(t *testing.T, r *mutationResolver, ctx context.Context) string {
+		t.Helper()
+		media, err := (&queryResolver{r.Resolver}).MyMediaNeedingReview(ctx, nil, nil)
+		if err != nil {
+			t.Fatal("MyMediaNeedingReview error:", err)
+		}
+		ids := make([]int, len(media))
+		for i, m := range media {
+			ids[i] = m.ID
+		}
+		return fmt.Sprint(ids)
+	}
+
+	t.Run("flagging touches only the flag of the given faces", func(t *testing.T) {
+		r, ctx, _ := setupVerifyTest(t)
+
+		changed, err := r.SetImageFacesNeedsReview(ctx, []int{1, 3}, true)
+		if err != nil {
+			t.Fatal("SetImageFacesNeedsReview error:", err)
+		}
+		if got := faceIDs(changed); got != "[1 3]" {
+			t.Errorf("changed faces = %s, want [1 3]", got)
+		}
+		for _, face := range changed {
+			if !face.NeedsReview {
+				t.Errorf("returned face %d is not flagged", face.ID)
+			}
+		}
+
+		for id, group := range map[int]int{1: 1, 3: 2} {
+			face := loadFace(t, r, id)
+			if !face.NeedsReview || face.Verified || face.FaceGroupID != group || face.AssignedBy != models.FaceAssignmentDetector {
+				t.Errorf("face %d = review %v, verified %v, group %d, %s; want flagged, unconfirmed, group %d, DETECTOR",
+					id, face.NeedsReview, face.Verified, face.FaceGroupID, face.AssignedBy, group)
+			}
+		}
+		for _, id := range []int{2, 4} {
+			if face := loadFace(t, r, id); face.NeedsReview {
+				t.Errorf("face %d should stay unflagged", id)
+			}
+		}
+
+		// Face 3 is on photo 2, so photos 1 and 2 are up for review.
+		if got := reviewList(t, r, ctx); got != "[2 1]" && got != "[1 2]" {
+			t.Errorf("photos up for review = %s, want 1 and 2", got)
+		}
+	})
+
+	t.Run("flagging a confirmed face keeps it confirmed", func(t *testing.T) {
+		r, ctx, _ := setupVerifyTest(t)
+		setFaceFlags(t, r, []int{1}, map[string]any{"verified": true})
+
+		if _, err := r.SetImageFacesNeedsReview(ctx, []int{1}, true); err != nil {
+			t.Fatal("SetImageFacesNeedsReview error:", err)
+		}
+
+		if face := loadFace(t, r, 1); !face.NeedsReview || !face.Verified {
+			t.Errorf("face 1 = review %v, verified %v; want true, true", face.NeedsReview, face.Verified)
+		}
+	})
+
+	t.Run("clearing the flag does not confirm", func(t *testing.T) {
+		r, ctx, _ := setupVerifyTest(t)
+		setFaceFlags(t, r, []int{1, 3}, map[string]any{"needs_review": true})
+
+		changed, err := r.SetImageFacesNeedsReview(ctx, []int{1, 3}, false)
+		if err != nil {
+			t.Fatal("SetImageFacesNeedsReview error:", err)
+		}
+		if got := faceIDs(changed); got != "[1 3]" {
+			t.Errorf("changed faces = %s, want [1 3]", got)
+		}
+
+		for _, id := range []int{1, 3} {
+			if face := loadFace(t, r, id); face.NeedsReview || face.Verified {
+				t.Errorf("face %d = review %v, verified %v; want false, false", id, face.NeedsReview, face.Verified)
+			}
+		}
+		if got := reviewList(t, r, ctx); got != "[]" {
+			t.Errorf("photos up for review = %s, want none", got)
+		}
+	})
+
+	t.Run("faces outside the user's albums are skipped", func(t *testing.T) {
+		r, _, _ := setupVerifyTest(t)
+		_, userCtx := setupNonAdminUserWithAlbum(t, r)
+
+		otherAlbum := models.Album{Title: "other", Path: "/other-album"}
+		if err := r.database.Create(&otherAlbum).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := r.database.Create(&models.Media{Model: models.Model{ID: 5}, Path: "other", AlbumID: otherAlbum.ID}).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := r.database.Create(&models.ImageFace{Model: models.Model{ID: 5}, FaceGroupID: 4, MediaID: 5}).Error; err != nil {
+			t.Fatal(err)
+		}
+
+		changed, err := r.SetImageFacesNeedsReview(userCtx, []int{1, 5}, true)
+		if err != nil {
+			t.Fatal("SetImageFacesNeedsReview error:", err)
+		}
+		if got := faceIDs(changed); got != "[1]" {
+			t.Errorf("changed faces = %s, want [1]", got)
+		}
+		if face := loadFace(t, r, 5); face.NeedsReview {
+			t.Error("face 5 is outside the user's albums and should stay unflagged")
+		}
+	})
+
+	t.Run("an empty list changes nothing", func(t *testing.T) {
+		r, ctx, _ := setupVerifyTest(t)
+
+		changed, err := r.SetImageFacesNeedsReview(ctx, []int{}, true)
+		if err != nil {
+			t.Fatal("SetImageFacesNeedsReview error:", err)
+		}
+		if changed == nil || len(changed) != 0 {
+			t.Errorf("changed = %v, want an empty list", changed)
+		}
+
+		var flagged int64
+		if err := r.database.Model(&models.ImageFace{}).Where("needs_review = ?", true).Count(&flagged).Error; err != nil {
+			t.Fatal(err)
+		}
+		if flagged != 0 {
+			t.Errorf("%d faces flagged, want none", flagged)
+		}
+	})
+}
+
 func TestMyMediaNeedingReview(t *testing.T) {
 	r, ctx, _ := setupVerifyTest(t)
 	// Photos 1 and 2 share a date, so their id decides; photo 3 is newest.
