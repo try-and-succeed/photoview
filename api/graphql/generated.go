@@ -81,6 +81,12 @@ type ComplexityRoot struct {
 		VerifiedFaceCount func(childComplexity int) int
 	}
 
+	FaceGroupMerge struct {
+		Destination        func(childComplexity int) int
+		ImageFaces         func(childComplexity int) int
+		SourceFaceGroupIDs func(childComplexity int) int
+	}
+
 	FaceRectangle struct {
 		MaxX func(childComplexity int) int
 		MaxY func(childComplexity int) int
@@ -147,34 +153,35 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		AuthorizeUser               func(childComplexity int, username string, password string) int
-		ChangeUserPreferences       func(childComplexity int, language *string) int
-		CombineFaceGroups           func(childComplexity int, destinationFaceGroupID int, sourceFaceGroupIDs []int) int
-		CreateUser                  func(childComplexity int, username string, password *string, admin bool, rootPath *string) int
-		DeleteShareToken            func(childComplexity int, token string) int
-		DeleteUser                  func(childComplexity int, id int) int
-		DetachImageFaces            func(childComplexity int, imageFaceIDs []int) int
-		FavoriteMedia               func(childComplexity int, mediaID int, favorite bool) int
-		InitialSetupWizard          func(childComplexity int, username string, password string, rootPath string) int
-		MoveImageFaces              func(childComplexity int, imageFaceIDs []int, destinationFaceGroupID int) int
-		ProtectShareToken           func(childComplexity int, token string, password *string) int
-		RecognizeUnlabeledFaces     func(childComplexity int) int
-		ResetAlbumCover             func(childComplexity int, albumID int) int
-		ScanAll                     func(childComplexity int) int
-		ScanUser                    func(childComplexity int, userID int) int
-		SetAlbumCover               func(childComplexity int, coverID int) int
-		SetExpireShareToken         func(childComplexity int, token string, expire *time.Time) int
-		SetFaceGroupLabel           func(childComplexity int, faceGroupID int, label *string) int
-		SetImageFacesVerified       func(childComplexity int, imageFaceIDs []int, verified bool) int
-		SetMediaFacesVerified       func(childComplexity int, mediaIDs []int, verified bool) int
-		SetPeriodicScanInterval     func(childComplexity int, interval int) int
-		SetScannerConcurrentWorkers func(childComplexity int, workers int) int
-		SetShareTokenLabel          func(childComplexity int, token string, label *string) int
-		ShareAlbum                  func(childComplexity int, albumID int, expire *time.Time, password *string, label *string) int
-		ShareMedia                  func(childComplexity int, mediaID int, expire *time.Time, password *string, label *string) int
-		UpdateUser                  func(childComplexity int, id int, username *string, password *string, admin *bool) int
-		UserAddRootPath             func(childComplexity int, id int, rootPath string) int
-		UserRemoveRootAlbum         func(childComplexity int, userID int, albumID int) int
+		AuthorizeUser                   func(childComplexity int, username string, password string) int
+		ChangeUserPreferences           func(childComplexity int, language *string) int
+		CombineFaceGroups               func(childComplexity int, destinationFaceGroupID int, sourceFaceGroupIDs []int) int
+		CreateUser                      func(childComplexity int, username string, password *string, admin bool, rootPath *string) int
+		DeleteShareToken                func(childComplexity int, token string) int
+		DeleteUser                      func(childComplexity int, id int) int
+		DetachImageFaces                func(childComplexity int, imageFaceIDs []int) int
+		FavoriteMedia                   func(childComplexity int, mediaID int, favorite bool) int
+		InitialSetupWizard              func(childComplexity int, username string, password string, rootPath string) int
+		MergeSimilarUnlabeledFaceGroups func(childComplexity int, dryRun bool, tolerance *float64) int
+		MoveImageFaces                  func(childComplexity int, imageFaceIDs []int, destinationFaceGroupID int) int
+		ProtectShareToken               func(childComplexity int, token string, password *string) int
+		RecognizeUnlabeledFaces         func(childComplexity int) int
+		ResetAlbumCover                 func(childComplexity int, albumID int) int
+		ScanAll                         func(childComplexity int) int
+		ScanUser                        func(childComplexity int, userID int) int
+		SetAlbumCover                   func(childComplexity int, coverID int) int
+		SetExpireShareToken             func(childComplexity int, token string, expire *time.Time) int
+		SetFaceGroupLabel               func(childComplexity int, faceGroupID int, label *string) int
+		SetImageFacesVerified           func(childComplexity int, imageFaceIDs []int, verified bool) int
+		SetMediaFacesVerified           func(childComplexity int, mediaIDs []int, verified bool) int
+		SetPeriodicScanInterval         func(childComplexity int, interval int) int
+		SetScannerConcurrentWorkers     func(childComplexity int, workers int) int
+		SetShareTokenLabel              func(childComplexity int, token string, label *string) int
+		ShareAlbum                      func(childComplexity int, albumID int, expire *time.Time, password *string, label *string) int
+		ShareMedia                      func(childComplexity int, mediaID int, expire *time.Time, password *string, label *string) int
+		UpdateUser                      func(childComplexity int, id int, username *string, password *string, admin *bool) int
+		UserAddRootPath                 func(childComplexity int, id int, rootPath string) int
+		UserRemoveRootAlbum             func(childComplexity int, userID int, albumID int) int
 	}
 
 	Notification struct {
@@ -325,6 +332,7 @@ type MutationResolver interface {
 	MoveImageFaces(ctx context.Context, imageFaceIDs []int, destinationFaceGroupID int) (*models.FaceGroup, error)
 	RecognizeUnlabeledFaces(ctx context.Context) ([]*models.ImageFace, error)
 	DetachImageFaces(ctx context.Context, imageFaceIDs []int) (*models.FaceGroup, error)
+	MergeSimilarUnlabeledFaceGroups(ctx context.Context, dryRun bool, tolerance *float64) ([]*models.FaceGroupMerge, error)
 	SetMediaFacesVerified(ctx context.Context, mediaIDs []int, verified bool) ([]*models.ImageFace, error)
 	SetImageFacesVerified(ctx context.Context, imageFaceIDs []int, verified bool) ([]*models.ImageFace, error)
 	FavoriteMedia(ctx context.Context, mediaID int, favorite bool) (*models.Media, error)
@@ -545,6 +553,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.FaceGroup.VerifiedFaceCount(childComplexity), true
+
+	case "FaceGroupMerge.destination":
+		if e.ComplexityRoot.FaceGroupMerge.Destination == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FaceGroupMerge.Destination(childComplexity), true
+	case "FaceGroupMerge.imageFaces":
+		if e.ComplexityRoot.FaceGroupMerge.ImageFaces == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FaceGroupMerge.ImageFaces(childComplexity), true
+	case "FaceGroupMerge.sourceFaceGroupIDs":
+		if e.ComplexityRoot.FaceGroupMerge.SourceFaceGroupIDs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FaceGroupMerge.SourceFaceGroupIDs(childComplexity), true
 
 	case "FaceRectangle.maxX":
 		if e.ComplexityRoot.FaceRectangle.MaxX == nil {
@@ -933,6 +960,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.InitialSetupWizard(childComplexity, args["username"].(string), args["password"].(string), args["rootPath"].(string)), true
+	case "Mutation.mergeSimilarUnlabeledFaceGroups":
+		if e.ComplexityRoot.Mutation.MergeSimilarUnlabeledFaceGroups == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_mergeSimilarUnlabeledFaceGroups_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.MergeSimilarUnlabeledFaceGroups(childComplexity, args["dryRun"].(bool), args["tolerance"].(*float64)), true
 	case "Mutation.moveImageFaces":
 		if e.ComplexityRoot.Mutation.MoveImageFaces == nil {
 			break
@@ -1814,6 +1852,18 @@ func (ec *executionContext) childFields_FaceGroup(ctx context.Context, field gra
 	return nil, fmt.Errorf("no field named %q was found under type FaceGroup", field.Name)
 }
 
+func (ec *executionContext) childFields_FaceGroupMerge(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "destination":
+		return ec.fieldContext_FaceGroupMerge_destination(ctx, field)
+	case "sourceFaceGroupIDs":
+		return ec.fieldContext_FaceGroupMerge_sourceFaceGroupIDs(ctx, field)
+	case "imageFaces":
+		return ec.fieldContext_FaceGroupMerge_imageFaces(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type FaceGroupMerge", field.Name)
+}
+
 func (ec *executionContext) childFields_FaceRectangle(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "minX":
@@ -2457,6 +2507,28 @@ func (ec *executionContext) field_Mutation_initialSetupWizard_args(ctx context.C
 		return nil, err
 	}
 	args["rootPath"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_mergeSimilarUnlabeledFaceGroups_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "dryRun",
+		func(ctx context.Context, v any) (bool, error) {
+			return ec.unmarshalNBoolean2bool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["dryRun"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "tolerance",
+		func(ctx context.Context, v any) (*float64, error) {
+			return ec.unmarshalOFloat2ᚖfloat64(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["tolerance"] = arg1
 	return args, nil
 }
 
@@ -3805,6 +3877,93 @@ func (ec *executionContext) _FaceGroup_reviewFaceCount(ctx context.Context, fiel
 }
 func (ec *executionContext) fieldContext_FaceGroup_reviewFaceCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("FaceGroup", field, true, true, "Int")
+}
+
+func (ec *executionContext) _FaceGroupMerge_destination(ctx context.Context, field graphql.CollectedField, obj *models.FaceGroupMerge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FaceGroupMerge_destination(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Destination, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *models.FaceGroup) graphql.Marshaler {
+			return ec.marshalNFaceGroup2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceGroup(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FaceGroupMerge_destination(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaceGroupMerge",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_FaceGroup(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaceGroupMerge_sourceFaceGroupIDs(ctx context.Context, field graphql.CollectedField, obj *models.FaceGroupMerge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FaceGroupMerge_sourceFaceGroupIDs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SourceFaceGroupIDs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []int) graphql.Marshaler {
+			return ec.marshalNID2ᚕintᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FaceGroupMerge_sourceFaceGroupIDs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FaceGroupMerge", field, false, false, "ID")
+}
+
+func (ec *executionContext) _FaceGroupMerge_imageFaces(ctx context.Context, field graphql.CollectedField, obj *models.FaceGroupMerge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FaceGroupMerge_imageFaces(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ImageFaces, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*models.ImageFace) graphql.Marshaler {
+			return ec.marshalNImageFace2ᚕᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐImageFaceᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FaceGroupMerge_imageFaces(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaceGroupMerge",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ImageFace(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _FaceRectangle_minX(ctx context.Context, field graphql.CollectedField, obj *models.FaceRectangle) (ret graphql.Marshaler) {
@@ -5404,6 +5563,63 @@ func (ec *executionContext) fieldContext_Mutation_detachImageFaces(ctx context.C
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_detachImageFaces_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_mergeSimilarUnlabeledFaceGroups(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_mergeSimilarUnlabeledFaceGroups(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().MergeSimilarUnlabeledFaceGroups(ctx, fc.Args["dryRun"].(bool), fc.Args["tolerance"].(*float64))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				if ec.Directives.IsAuthorized == nil {
+					var zeroVal []*models.FaceGroupMerge
+					return zeroVal, errors.New("directive isAuthorized is not implemented")
+				}
+				return ec.Directives.IsAuthorized(ctx, nil, directive0)
+			}
+
+			next = directive1
+			return next
+		},
+		func(ctx context.Context, selections ast.SelectionSet, v []*models.FaceGroupMerge) graphql.Marshaler {
+			return ec.marshalNFaceGroupMerge2ᚕᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceGroupMergeᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_mergeSimilarUnlabeledFaceGroups(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_FaceGroupMerge(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_mergeSimilarUnlabeledFaceGroups_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -10271,6 +10487,49 @@ func (ec *executionContext) _FaceGroup(ctx context.Context, sel ast.SelectionSet
 	return out
 }
 
+var faceGroupMergeImplementors = []string{"FaceGroupMerge"}
+
+func (ec *executionContext) _FaceGroupMerge(ctx context.Context, sel ast.SelectionSet, obj *models.FaceGroupMerge) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, faceGroupMergeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FaceGroupMerge")
+		case "destination":
+			out.Values[i] = ec._FaceGroupMerge_destination(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sourceFaceGroupIDs":
+			out.Values[i] = ec._FaceGroupMerge_sourceFaceGroupIDs(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "imageFaces":
+			out.Values[i] = ec._FaceGroupMerge_imageFaces(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var faceRectangleImplementors = []string{"FaceRectangle"}
 
 func (ec *executionContext) _FaceRectangle(ctx context.Context, sel ast.SelectionSet, obj *models.FaceRectangle) graphql.Marshaler {
@@ -10750,6 +11009,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "detachImageFaces":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_detachImageFaces(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mergeSimilarUnlabeledFaceGroups":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_mergeSimilarUnlabeledFaceGroups(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -12051,6 +12317,30 @@ func (ec *executionContext) marshalNFaceGroup2ᚖgithubᚗcomᚋphotoviewᚋphot
 		return graphql.Null
 	}
 	return ec._FaceGroup(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNFaceGroupMerge2ᚕᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceGroupMergeᚄ(ctx context.Context, sel ast.SelectionSet, v []*models.FaceGroupMerge) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNFaceGroupMerge2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceGroupMerge(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNFaceGroupMerge2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceGroupMerge(ctx context.Context, sel ast.SelectionSet, v *models.FaceGroupMerge) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "FaceGroupMerge!")
+		return graphql.Null
+	}
+	return ec._FaceGroupMerge(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNFaceRectangle2githubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceRectangle(ctx context.Context, sel ast.SelectionSet, v models.FaceRectangle) graphql.Marshaler {

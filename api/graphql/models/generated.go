@@ -25,6 +25,16 @@ type Coordinates struct {
 	Longitude float64 `json:"longitude"`
 }
 
+// Unlabeled face groups without a confirmed face whose faces look like one person
+type FaceGroupMerge struct {
+	// The group the others are merged into: the one with the most faces, then the lowest id
+	Destination *FaceGroup `json:"destination"`
+	// The groups merged into destination. After a real run they no longer exist
+	SourceFaceGroupIDs []int `json:"sourceFaceGroupIDs"`
+	// Every face of the merged groups, for a preview
+	ImageFaces []*ImageFace `json:"imageFaces"`
+}
+
 // Which faces of a group to list
 type ImageFaceFilter struct {
 	Verified    *bool `json:"verified,omitempty"`
