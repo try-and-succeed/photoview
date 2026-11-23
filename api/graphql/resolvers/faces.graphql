@@ -113,7 +113,7 @@ extend type Mutation {
     allowDuplicates: Boolean = false
   ): FaceGroup! @isAuthorized
 
-  "Check all unlabeled faces to see if they match a labeled FaceGroup, and move them if they match"
+  "Check the unconfirmed unlabeled faces against the confirmed faces of each person (a FaceGroup with a label or a confirmed face), and move them if a person matches"
   recognizeUnlabeledFaces: [ImageFace!]! @isAuthorized
 
   "Move a list of ImageFaces to a new face group"

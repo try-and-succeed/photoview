@@ -300,8 +300,7 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 		occupied[groupPhoto{face.FaceGroupID, face.MediaID}] = true
 	}
 
-	// Labeled means named, whoever's albums the group is on: a face is never
-	// moved into a group without a name.
+	// Labeled means named, whoever's albums the group is on.
 	var labeledFaceGroupIDs []int
 	if err := tx.Model(&models.FaceGroup{}).Where("label IS NOT NULL").Pluck("id", &labeledFaceGroupIDs).Error; err != nil {
 		return nil, err
@@ -318,18 +317,31 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 	fd.mutex.Lock()
 	defer fd.mutex.Unlock()
 
+	// A person is a group with a name, or one with a face a user confirmed:
+	// confirming a face without naming it says "this is someone, even if I
+	// do not know who".
+	person := make(map[int32]bool, len(labeled))
+	for id := range labeled {
+		person[id] = true
+	}
+	for i, imageFaceID := range fd.imageFaceIDs {
+		if verified[imageFaceID] {
+			person[fd.faceGroupIDs[i]] = true
+		}
+	}
+
 	// The references, fixed for the whole run so that a face placed here
 	// does not pull in the next one:
 	//
 	//   - of a person, only the faces a user confirmed. A face the detector
 	//     or an earlier run placed may be wrong, and as a reference one wrong
 	//     face pulls in more strangers with every run.
-	//   - every unlabeled face. They cannot win a face for themselves, but
-	//     they vote: a stranger whose nearest faces are other photos of that
-	//     stranger stays where it is, even when a confirmed face of a person
-	//     is within the tolerance too. Without them, a person with only a
-	//     few confirmed faces gets every similar stranger, which happens
-	//     especially with children.
+	//   - every other unlabeled face. They cannot win a face for themselves,
+	//     but they vote: a stranger whose nearest faces are other photos of
+	//     that stranger stays where it is, even when a confirmed face of a
+	//     person is within the tolerance too. Without them, a person with
+	//     only a few confirmed faces gets every similar stranger, which
+	//     happens especially with children.
 	references := make([]Reference, 0, len(fd.faceDescriptors))
 	referenceIndex := make(map[int]int)
 	candidates := make([]int, 0)
@@ -337,9 +349,13 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 		faceGroupID := fd.faceGroupIDs[i]
 		imageFaceID := fd.imageFaceIDs[i]
 
-		if labeled[faceGroupID] {
+		if person[faceGroupID] {
 			if verified[imageFaceID] {
 				references = append(references, Reference{FaceGroupID: int(faceGroupID), Descriptor: models.FaceDescriptor(fd.faceDescriptors[i])})
+			} else if candidateGroups[faceGroupID] {
+				// An unconfirmed face of an unnamed person: no reference,
+				// but it may find a better match.
+				candidates = append(candidates, i)
 			}
 			continue
 		}
@@ -361,14 +377,20 @@ func (fd *faceDetector) RecognizeUnlabeledFaces(tx *gorm.DB, user *models.User) 
 		faceGroupID := fd.faceGroupIDs[i]
 		imageFaceID := fd.imageFaceIDs[i]
 
-		// A face does not vote for itself: swap it to the end and leave it
-		// out, then put it back.
-		self := referenceIndex[imageFaceID]
-		references[self], references[last] = references[last], references[self]
-		match := ClassifyByVote(references[:last], models.FaceDescriptor(fd.faceDescriptors[i]), DefaultTolerance)
-		references[self], references[last] = references[last], references[self]
+		var match int
+		if self, ok := referenceIndex[imageFaceID]; ok {
+			// A face does not vote for itself: swap it to the end and leave
+			// it out, then put it back.
+			references[self], references[last] = references[last], references[self]
+			match = ClassifyByVote(references[:last], models.FaceDescriptor(fd.faceDescriptors[i]), DefaultTolerance)
+			references[self], references[last] = references[last], references[self]
+		} else {
+			match = ClassifyByVote(references, models.FaceDescriptor(fd.faceDescriptors[i]), DefaultTolerance)
+		}
 
-		if match < 0 || !labeled[int32(match)] {
+		// Only a person wins a face, and a face that matches its own group
+		// stays as it is.
+		if match < 0 || !person[int32(match)] || int32(match) == faceGroupID {
 			continue
 		}
 
