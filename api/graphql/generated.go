@@ -61,6 +61,11 @@ type ComplexityRoot struct {
 		Title       func(childComplexity int) int
 	}
 
+	AlbumTreeChildren struct {
+		AlbumID  func(childComplexity int) int
+		Children func(childComplexity int) int
+	}
+
 	AuthorizeResult struct {
 		Status  func(childComplexity int) int
 		Success func(childComplexity int) int
@@ -85,6 +90,12 @@ type ComplexityRoot struct {
 		Destination        func(childComplexity int) int
 		ImageFaces         func(childComplexity int) int
 		SourceFaceGroupIDs func(childComplexity int) int
+	}
+
+	FaceReassignment struct {
+		From      func(childComplexity int) int
+		ImageFace func(childComplexity int) int
+		To        func(childComplexity int) int
 	}
 
 	FaceRectangle struct {
@@ -154,7 +165,9 @@ type ComplexityRoot struct {
 
 	Mutation struct {
 		AuthorizeUser                   func(childComplexity int, username string, password string) int
-		ChangeUserPreferences           func(childComplexity int, language *string) int
+		CancelAllScanJobs               func(childComplexity int) int
+		CancelScanJob                   func(childComplexity int, albumID int) int
+		ChangeUserPreferences           func(childComplexity int, language *string, searchResultLimit *int, showAlbumTree *bool) int
 		CombineFaceGroups               func(childComplexity int, destinationFaceGroupID int, sourceFaceGroupIDs []int) int
 		CreateUser                      func(childComplexity int, username string, password *string, admin bool, rootPath *string) int
 		DeleteShareToken                func(childComplexity int, token string) int
@@ -163,10 +176,12 @@ type ComplexityRoot struct {
 		FavoriteMedia                   func(childComplexity int, mediaID int, favorite bool) int
 		InitialSetupWizard              func(childComplexity int, username string, password string, rootPath string) int
 		MergeSimilarUnlabeledFaceGroups func(childComplexity int, dryRun bool, tolerance *float64) int
-		MoveImageFaces                  func(childComplexity int, imageFaceIDs []int, destinationFaceGroupID int) int
+		MoveImageFaces                  func(childComplexity int, imageFaceIDs []int, destinationFaceGroupID int, allowDuplicates *bool) int
 		ProtectShareToken               func(childComplexity int, token string, password *string) int
+		ReclassifyFaceGroups            func(childComplexity int, faceGroupIDs []int, dryRun bool, tolerance *float64) int
 		RecognizeUnlabeledFaces         func(childComplexity int) int
 		ResetAlbumCover                 func(childComplexity int, albumID int) int
+		ScanAlbum                       func(childComplexity int, albumID int, onlyNewSubAlbums *bool) int
 		ScanAll                         func(childComplexity int) int
 		ScanUser                        func(childComplexity int, userID int) int
 		SetAlbumCover                   func(childComplexity int, coverID int) int
@@ -197,23 +212,40 @@ type ComplexityRoot struct {
 
 	Query struct {
 		Album                      func(childComplexity int, id int, tokenCredentials *models.ShareTokenCredentials) int
+		AlbumTreeChildren          func(childComplexity int, albumIds []int) int
 		FaceGroup                  func(childComplexity int, id int) int
 		MapboxToken                func(childComplexity int) int
 		Media                      func(childComplexity int, id int, tokenCredentials *models.ShareTokenCredentials) int
 		MediaList                  func(childComplexity int, ids []int) int
 		MyAlbums                   func(childComplexity int, order *models.Ordering, paginate *models.Pagination, onlyRoot *bool, showEmpty *bool, onlyWithFavorites *bool) int
-		MyFaceGroups               func(childComplexity int, paginate *models.Pagination) int
+		MyFaceGroups               func(childComplexity int, paginate *models.Pagination, countDirection *models.OrderDirection) int
 		MyMedia                    func(childComplexity int, order *models.Ordering, paginate *models.Pagination) int
 		MyMediaGeoJSON             func(childComplexity int) int
 		MyMediaNeedingReview       func(childComplexity int, faceGroupID *int, paginate *models.Pagination) int
 		MyTimeline                 func(childComplexity int, paginate *models.Pagination, onlyFavorites *bool, fromDate *time.Time) int
 		MyUser                     func(childComplexity int) int
 		MyUserPreferences          func(childComplexity int) int
+		ScannerQueueStatus         func(childComplexity int) int
 		Search                     func(childComplexity int, query string, limitMedia *int, limitAlbums *int) int
 		ShareToken                 func(childComplexity int, credentials models.ShareTokenCredentials) int
 		ShareTokenValidatePassword func(childComplexity int, credentials models.ShareTokenCredentials) int
 		SiteInfo                   func(childComplexity int) int
 		User                       func(childComplexity int, order *models.Ordering, paginate *models.Pagination) int
+	}
+
+	ReclassifyResult struct {
+		Changes         func(childComplexity int) int
+		Checked         func(childComplexity int) int
+		Conflicts       func(childComplexity int) int
+		Kept            func(childComplexity int) int
+		Moved           func(childComplexity int) int
+		Unmatched       func(childComplexity int) int
+		VerifiedSamples func(childComplexity int) int
+	}
+
+	ScannerQueueItem struct {
+		Album  func(childComplexity int) int
+		Status func(childComplexity int) int
 	}
 
 	ScannerResult struct {
@@ -267,8 +299,10 @@ type ComplexityRoot struct {
 	}
 
 	UserPreferences struct {
-		ID       func(childComplexity int) int
-		Language func(childComplexity int) int
+		ID                func(childComplexity int) int
+		Language          func(childComplexity int) int
+		SearchResultLimit func(childComplexity int) int
+		ShowAlbumTree     func(childComplexity int) int
 	}
 
 	VideoMetadata struct {
@@ -329,15 +363,19 @@ type MutationResolver interface {
 	SetAlbumCover(ctx context.Context, coverID int) (*models.Album, error)
 	SetFaceGroupLabel(ctx context.Context, faceGroupID int, label *string) (*models.FaceGroup, error)
 	CombineFaceGroups(ctx context.Context, destinationFaceGroupID int, sourceFaceGroupIDs []int) (*models.FaceGroup, error)
-	MoveImageFaces(ctx context.Context, imageFaceIDs []int, destinationFaceGroupID int) (*models.FaceGroup, error)
+	MoveImageFaces(ctx context.Context, imageFaceIDs []int, destinationFaceGroupID int, allowDuplicates *bool) (*models.FaceGroup, error)
 	RecognizeUnlabeledFaces(ctx context.Context) ([]*models.ImageFace, error)
 	DetachImageFaces(ctx context.Context, imageFaceIDs []int) (*models.FaceGroup, error)
 	MergeSimilarUnlabeledFaceGroups(ctx context.Context, dryRun bool, tolerance *float64) ([]*models.FaceGroupMerge, error)
 	SetMediaFacesVerified(ctx context.Context, mediaIDs []int, verified bool) ([]*models.ImageFace, error)
 	SetImageFacesVerified(ctx context.Context, imageFaceIDs []int, verified bool) ([]*models.ImageFace, error)
+	ReclassifyFaceGroups(ctx context.Context, faceGroupIDs []int, dryRun bool, tolerance *float64) (*models.ReclassifyResult, error)
 	FavoriteMedia(ctx context.Context, mediaID int, favorite bool) (*models.Media, error)
 	ScanAll(ctx context.Context) (*models.ScannerResult, error)
 	ScanUser(ctx context.Context, userID int) (*models.ScannerResult, error)
+	CancelScanJob(ctx context.Context, albumID int) (bool, error)
+	CancelAllScanJobs(ctx context.Context) (int, error)
+	ScanAlbum(ctx context.Context, albumID int, onlyNewSubAlbums *bool) (*models.ScannerResult, error)
 	SetPeriodicScanInterval(ctx context.Context, interval int) (int, error)
 	SetScannerConcurrentWorkers(ctx context.Context, workers int) (int, error)
 	ShareAlbum(ctx context.Context, albumID int, expire *time.Time, password *string, label *string) (*models.ShareToken, error)
@@ -353,12 +391,13 @@ type MutationResolver interface {
 	DeleteUser(ctx context.Context, id int) (*models.User, error)
 	UserAddRootPath(ctx context.Context, id int, rootPath string) (*models.Album, error)
 	UserRemoveRootAlbum(ctx context.Context, userID int, albumID int) (*models.Album, error)
-	ChangeUserPreferences(ctx context.Context, language *string) (*models.UserPreferences, error)
+	ChangeUserPreferences(ctx context.Context, language *string, searchResultLimit *int, showAlbumTree *bool) (*models.UserPreferences, error)
 }
 type QueryResolver interface {
 	MyAlbums(ctx context.Context, order *models.Ordering, paginate *models.Pagination, onlyRoot *bool, showEmpty *bool, onlyWithFavorites *bool) ([]*models.Album, error)
 	Album(ctx context.Context, id int, tokenCredentials *models.ShareTokenCredentials) (*models.Album, error)
-	MyFaceGroups(ctx context.Context, paginate *models.Pagination) ([]*models.FaceGroup, error)
+	AlbumTreeChildren(ctx context.Context, albumIds []int) ([]*models.AlbumTreeChildren, error)
+	MyFaceGroups(ctx context.Context, paginate *models.Pagination, countDirection *models.OrderDirection) ([]*models.FaceGroup, error)
 	FaceGroup(ctx context.Context, id int) (*models.FaceGroup, error)
 	MyMediaNeedingReview(ctx context.Context, faceGroupID *int, paginate *models.Pagination) ([]*models.Media, error)
 	MyMedia(ctx context.Context, order *models.Ordering, paginate *models.Pagination) ([]*models.Media, error)
@@ -366,6 +405,7 @@ type QueryResolver interface {
 	MediaList(ctx context.Context, ids []int) ([]*models.Media, error)
 	MyMediaGeoJSON(ctx context.Context) (any, error)
 	MapboxToken(ctx context.Context) (*string, error)
+	ScannerQueueStatus(ctx context.Context) ([]*models.ScannerQueueItem, error)
 	Search(ctx context.Context, query string, limitMedia *int, limitAlbums *int) (*models.SearchResult, error)
 	ShareToken(ctx context.Context, credentials models.ShareTokenCredentials) (*models.ShareToken, error)
 	ShareTokenValidatePassword(ctx context.Context, credentials models.ShareTokenCredentials) (bool, error)
@@ -480,6 +520,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Album.Title(childComplexity), true
 
+	case "AlbumTreeChildren.albumId":
+		if e.ComplexityRoot.AlbumTreeChildren.AlbumID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AlbumTreeChildren.AlbumID(childComplexity), true
+	case "AlbumTreeChildren.children":
+		if e.ComplexityRoot.AlbumTreeChildren.Children == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AlbumTreeChildren.Children(childComplexity), true
+
 	case "AuthorizeResult.status":
 		if e.ComplexityRoot.AuthorizeResult.Status == nil {
 			break
@@ -572,6 +625,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.FaceGroupMerge.SourceFaceGroupIDs(childComplexity), true
+
+	case "FaceReassignment.from":
+		if e.ComplexityRoot.FaceReassignment.From == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FaceReassignment.From(childComplexity), true
+	case "FaceReassignment.imageFace":
+		if e.ComplexityRoot.FaceReassignment.ImageFace == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FaceReassignment.ImageFace(childComplexity), true
+	case "FaceReassignment.to":
+		if e.ComplexityRoot.FaceReassignment.To == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FaceReassignment.To(childComplexity), true
 
 	case "FaceRectangle.maxX":
 		if e.ComplexityRoot.FaceRectangle.MaxX == nil {
@@ -872,6 +944,23 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AuthorizeUser(childComplexity, args["username"].(string), args["password"].(string)), true
+	case "Mutation.cancelAllScanJobs":
+		if e.ComplexityRoot.Mutation.CancelAllScanJobs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Mutation.CancelAllScanJobs(childComplexity), true
+	case "Mutation.cancelScanJob":
+		if e.ComplexityRoot.Mutation.CancelScanJob == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_cancelScanJob_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CancelScanJob(childComplexity, args["albumId"].(int)), true
 	case "Mutation.changeUserPreferences":
 		if e.ComplexityRoot.Mutation.ChangeUserPreferences == nil {
 			break
@@ -882,7 +971,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.ChangeUserPreferences(childComplexity, args["language"].(*string)), true
+		return e.ComplexityRoot.Mutation.ChangeUserPreferences(childComplexity, args["language"].(*string), args["searchResultLimit"].(*int), args["showAlbumTree"].(*bool)), true
 	case "Mutation.combineFaceGroups":
 		if e.ComplexityRoot.Mutation.CombineFaceGroups == nil {
 			break
@@ -981,7 +1070,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.MoveImageFaces(childComplexity, args["imageFaceIDs"].([]int), args["destinationFaceGroupID"].(int)), true
+		return e.ComplexityRoot.Mutation.MoveImageFaces(childComplexity, args["imageFaceIDs"].([]int), args["destinationFaceGroupID"].(int), args["allowDuplicates"].(*bool)), true
 	case "Mutation.protectShareToken":
 		if e.ComplexityRoot.Mutation.ProtectShareToken == nil {
 			break
@@ -993,6 +1082,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ProtectShareToken(childComplexity, args["token"].(string), args["password"].(*string)), true
+	case "Mutation.reclassifyFaceGroups":
+		if e.ComplexityRoot.Mutation.ReclassifyFaceGroups == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_reclassifyFaceGroups_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ReclassifyFaceGroups(childComplexity, args["faceGroupIDs"].([]int), args["dryRun"].(bool), args["tolerance"].(*float64)), true
 	case "Mutation.recognizeUnlabeledFaces":
 		if e.ComplexityRoot.Mutation.RecognizeUnlabeledFaces == nil {
 			break
@@ -1010,6 +1110,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ResetAlbumCover(childComplexity, args["albumID"].(int)), true
+	case "Mutation.scanAlbum":
+		if e.ComplexityRoot.Mutation.ScanAlbum == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_scanAlbum_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ScanAlbum(childComplexity, args["albumId"].(int), args["onlyNewSubAlbums"].(*bool)), true
 	case "Mutation.scanAll":
 		if e.ComplexityRoot.Mutation.ScanAll == nil {
 			break
@@ -1231,6 +1342,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Album(childComplexity, args["id"].(int), args["tokenCredentials"].(*models.ShareTokenCredentials)), true
+	case "Query.albumTreeChildren":
+		if e.ComplexityRoot.Query.AlbumTreeChildren == nil {
+			break
+		}
+
+		args, err := ec.field_Query_albumTreeChildren_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AlbumTreeChildren(childComplexity, args["albumIds"].([]int)), true
 	case "Query.faceGroup":
 		if e.ComplexityRoot.Query.FaceGroup == nil {
 			break
@@ -1292,7 +1414,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.MyFaceGroups(childComplexity, args["paginate"].(*models.Pagination)), true
+		return e.ComplexityRoot.Query.MyFaceGroups(childComplexity, args["paginate"].(*models.Pagination), args["countDirection"].(*models.OrderDirection)), true
 	case "Query.myMedia":
 		if e.ComplexityRoot.Query.MyMedia == nil {
 			break
@@ -1344,6 +1466,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.MyUserPreferences(childComplexity), true
+	case "Query.scannerQueueStatus":
+		if e.ComplexityRoot.Query.ScannerQueueStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.ScannerQueueStatus(childComplexity), true
 	case "Query.search":
 		if e.ComplexityRoot.Query.Search == nil {
 			break
@@ -1394,6 +1522,62 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.User(childComplexity, args["order"].(*models.Ordering), args["paginate"].(*models.Pagination)), true
+
+	case "ReclassifyResult.changes":
+		if e.ComplexityRoot.ReclassifyResult.Changes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReclassifyResult.Changes(childComplexity), true
+	case "ReclassifyResult.checked":
+		if e.ComplexityRoot.ReclassifyResult.Checked == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReclassifyResult.Checked(childComplexity), true
+	case "ReclassifyResult.conflicts":
+		if e.ComplexityRoot.ReclassifyResult.Conflicts == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReclassifyResult.Conflicts(childComplexity), true
+	case "ReclassifyResult.kept":
+		if e.ComplexityRoot.ReclassifyResult.Kept == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReclassifyResult.Kept(childComplexity), true
+	case "ReclassifyResult.moved":
+		if e.ComplexityRoot.ReclassifyResult.Moved == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReclassifyResult.Moved(childComplexity), true
+	case "ReclassifyResult.unmatched":
+		if e.ComplexityRoot.ReclassifyResult.Unmatched == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReclassifyResult.Unmatched(childComplexity), true
+	case "ReclassifyResult.verifiedSamples":
+		if e.ComplexityRoot.ReclassifyResult.VerifiedSamples == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReclassifyResult.VerifiedSamples(childComplexity), true
+
+	case "ScannerQueueItem.album":
+		if e.ComplexityRoot.ScannerQueueItem.Album == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ScannerQueueItem.Album(childComplexity), true
+	case "ScannerQueueItem.status":
+		if e.ComplexityRoot.ScannerQueueItem.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ScannerQueueItem.Status(childComplexity), true
 
 	case "ScannerResult.finished":
 		if e.ComplexityRoot.ScannerResult.Finished == nil {
@@ -1588,6 +1772,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.UserPreferences.Language(childComplexity), true
+	case "UserPreferences.searchResultLimit":
+		if e.ComplexityRoot.UserPreferences.SearchResultLimit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UserPreferences.SearchResultLimit(childComplexity), true
+	case "UserPreferences.showAlbumTree":
+		if e.ComplexityRoot.UserPreferences.ShowAlbumTree == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UserPreferences.ShowAlbumTree(childComplexity), true
 
 	case "VideoMetadata.audio":
 		if e.ComplexityRoot.VideoMetadata.Audio == nil {
@@ -1812,6 +2008,16 @@ func (ec *executionContext) childFields_Album(ctx context.Context, field graphql
 	return nil, fmt.Errorf("no field named %q was found under type Album", field.Name)
 }
 
+func (ec *executionContext) childFields_AlbumTreeChildren(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "albumId":
+		return ec.fieldContext_AlbumTreeChildren_albumId(ctx, field)
+	case "children":
+		return ec.fieldContext_AlbumTreeChildren_children(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AlbumTreeChildren", field.Name)
+}
+
 func (ec *executionContext) childFields_AuthorizeResult(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "success":
@@ -1862,6 +2068,18 @@ func (ec *executionContext) childFields_FaceGroupMerge(ctx context.Context, fiel
 		return ec.fieldContext_FaceGroupMerge_imageFaces(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type FaceGroupMerge", field.Name)
+}
+
+func (ec *executionContext) childFields_FaceReassignment(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "imageFace":
+		return ec.fieldContext_FaceReassignment_imageFace(ctx, field)
+	case "from":
+		return ec.fieldContext_FaceReassignment_from(ctx, field)
+	case "to":
+		return ec.fieldContext_FaceReassignment_to(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type FaceReassignment", field.Name)
 }
 
 func (ec *executionContext) childFields_FaceRectangle(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -2016,6 +2234,36 @@ func (ec *executionContext) childFields_Notification(ctx context.Context, field 
 	return nil, fmt.Errorf("no field named %q was found under type Notification", field.Name)
 }
 
+func (ec *executionContext) childFields_ReclassifyResult(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "checked":
+		return ec.fieldContext_ReclassifyResult_checked(ctx, field)
+	case "kept":
+		return ec.fieldContext_ReclassifyResult_kept(ctx, field)
+	case "moved":
+		return ec.fieldContext_ReclassifyResult_moved(ctx, field)
+	case "unmatched":
+		return ec.fieldContext_ReclassifyResult_unmatched(ctx, field)
+	case "conflicts":
+		return ec.fieldContext_ReclassifyResult_conflicts(ctx, field)
+	case "verifiedSamples":
+		return ec.fieldContext_ReclassifyResult_verifiedSamples(ctx, field)
+	case "changes":
+		return ec.fieldContext_ReclassifyResult_changes(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ReclassifyResult", field.Name)
+}
+
+func (ec *executionContext) childFields_ScannerQueueItem(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "album":
+		return ec.fieldContext_ScannerQueueItem_album(ctx, field)
+	case "status":
+		return ec.fieldContext_ScannerQueueItem_status(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ScannerQueueItem", field.Name)
+}
+
 func (ec *executionContext) childFields_ScannerResult(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "finished":
@@ -2100,6 +2348,10 @@ func (ec *executionContext) childFields_UserPreferences(ctx context.Context, fie
 		return ec.fieldContext_UserPreferences_id(ctx, field)
 	case "language":
 		return ec.fieldContext_UserPreferences_language(ctx, field)
+	case "searchResultLimit":
+		return ec.fieldContext_UserPreferences_searchResultLimit(ctx, field)
+	case "showAlbumTree":
+		return ec.fieldContext_UserPreferences_showAlbumTree(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type UserPreferences", field.Name)
 }
@@ -2342,6 +2594,20 @@ func (ec *executionContext) field_Mutation_authorizeUser_args(ctx context.Contex
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_cancelScanJob_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "albumId",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNID2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["albumId"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_changeUserPreferences_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -2353,6 +2619,22 @@ func (ec *executionContext) field_Mutation_changeUserPreferences_args(ctx contex
 		return nil, err
 	}
 	args["language"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "searchResultLimit",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["searchResultLimit"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "showAlbumTree",
+		func(ctx context.Context, v any) (*bool, error) {
+			return ec.unmarshalOBoolean2ᚖbool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["showAlbumTree"] = arg2
 	return args, nil
 }
 
@@ -2551,6 +2833,14 @@ func (ec *executionContext) field_Mutation_moveImageFaces_args(ctx context.Conte
 		return nil, err
 	}
 	args["destinationFaceGroupID"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "allowDuplicates",
+		func(ctx context.Context, v any) (*bool, error) {
+			return ec.unmarshalOBoolean2ᚖbool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["allowDuplicates"] = arg2
 	return args, nil
 }
 
@@ -2576,6 +2866,36 @@ func (ec *executionContext) field_Mutation_protectShareToken_args(ctx context.Co
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_reclassifyFaceGroups_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "faceGroupIDs",
+		func(ctx context.Context, v any) ([]int, error) {
+			return ec.unmarshalNID2ᚕintᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["faceGroupIDs"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "dryRun",
+		func(ctx context.Context, v any) (bool, error) {
+			return ec.unmarshalNBoolean2bool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["dryRun"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "tolerance",
+		func(ctx context.Context, v any) (*float64, error) {
+			return ec.unmarshalOFloat2ᚖfloat64(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["tolerance"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_resetAlbumCover_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -2587,6 +2907,28 @@ func (ec *executionContext) field_Mutation_resetAlbumCover_args(ctx context.Cont
 		return nil, err
 	}
 	args["albumID"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_scanAlbum_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "albumId",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNID2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["albumId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "onlyNewSubAlbums",
+		func(ctx context.Context, v any) (*bool, error) {
+			return ec.unmarshalOBoolean2ᚖbool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["onlyNewSubAlbums"] = arg1
 	return args, nil
 }
 
@@ -2928,6 +3270,20 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_albumTreeChildren_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "albumIds",
+		func(ctx context.Context, v any) ([]int, error) {
+			return ec.unmarshalNID2ᚕintᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["albumIds"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_album_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -3057,6 +3413,14 @@ func (ec *executionContext) field_Query_myFaceGroups_args(ctx context.Context, r
 		return nil, err
 	}
 	args["paginate"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "countDirection",
+		func(ctx context.Context, v any) (*models.OrderDirection, error) {
+			return ec.unmarshalOOrderDirection2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐOrderDirection(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["countDirection"] = arg1
 	return args, nil
 }
 
@@ -3605,6 +3969,61 @@ func (ec *executionContext) fieldContext_Album_shares(_ context.Context, field g
 	return fc, nil
 }
 
+func (ec *executionContext) _AlbumTreeChildren_albumId(ctx context.Context, field graphql.CollectedField, obj *models.AlbumTreeChildren) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AlbumTreeChildren_albumId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AlbumID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNID2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AlbumTreeChildren_albumId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AlbumTreeChildren", field, false, false, "ID")
+}
+
+func (ec *executionContext) _AlbumTreeChildren_children(ctx context.Context, field graphql.CollectedField, obj *models.AlbumTreeChildren) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AlbumTreeChildren_children(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Children, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*models.Album) graphql.Marshaler {
+			return ec.marshalNAlbum2ᚕᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐAlbumᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AlbumTreeChildren_children(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AlbumTreeChildren",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Album(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _AuthorizeResult_success(ctx context.Context, field graphql.CollectedField, obj *models.AuthorizeResult) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -3961,6 +4380,102 @@ func (ec *executionContext) fieldContext_FaceGroupMerge_imageFaces(_ context.Con
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_ImageFace(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaceReassignment_imageFace(ctx context.Context, field graphql.CollectedField, obj *models.FaceReassignment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FaceReassignment_imageFace(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ImageFace, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *models.ImageFace) graphql.Marshaler {
+			return ec.marshalNImageFace2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐImageFace(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FaceReassignment_imageFace(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaceReassignment",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ImageFace(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaceReassignment_from(ctx context.Context, field graphql.CollectedField, obj *models.FaceReassignment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FaceReassignment_from(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.From, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *models.FaceGroup) graphql.Marshaler {
+			return ec.marshalNFaceGroup2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceGroup(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FaceReassignment_from(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaceReassignment",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_FaceGroup(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaceReassignment_to(ctx context.Context, field graphql.CollectedField, obj *models.FaceReassignment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FaceReassignment_to(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.To, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *models.FaceGroup) graphql.Marshaler {
+			return ec.marshalOFaceGroup2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceGroup(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_FaceReassignment_to(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaceReassignment",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_FaceGroup(ctx, field)
 		},
 	}
 	return fc, nil
@@ -5420,7 +5935,7 @@ func (ec *executionContext) _Mutation_moveImageFaces(ctx context.Context, field 
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().MoveImageFaces(ctx, fc.Args["imageFaceIDs"].([]int), fc.Args["destinationFaceGroupID"].(int))
+			return ec.Resolvers.Mutation().MoveImageFaces(ctx, fc.Args["imageFaceIDs"].([]int), fc.Args["destinationFaceGroupID"].(int), fc.Args["allowDuplicates"].(*bool))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -5740,6 +6255,63 @@ func (ec *executionContext) fieldContext_Mutation_setImageFacesVerified(ctx cont
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_reclassifyFaceGroups(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_reclassifyFaceGroups(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ReclassifyFaceGroups(ctx, fc.Args["faceGroupIDs"].([]int), fc.Args["dryRun"].(bool), fc.Args["tolerance"].(*float64))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				if ec.Directives.IsAuthorized == nil {
+					var zeroVal *models.ReclassifyResult
+					return zeroVal, errors.New("directive isAuthorized is not implemented")
+				}
+				return ec.Directives.IsAuthorized(ctx, nil, directive0)
+			}
+
+			next = directive1
+			return next
+		},
+		func(ctx context.Context, selections ast.SelectionSet, v *models.ReclassifyResult) graphql.Marshaler {
+			return ec.marshalNReclassifyResult2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐReclassifyResult(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_reclassifyFaceGroups(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ReclassifyResult(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_reclassifyFaceGroups_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_favoriteMedia(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -5893,6 +6465,156 @@ func (ec *executionContext) fieldContext_Mutation_scanUser(ctx context.Context, 
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_scanUser_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_cancelScanJob(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_cancelScanJob(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CancelScanJob(ctx, fc.Args["albumId"].(int))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				if ec.Directives.IsAuthorized == nil {
+					var zeroVal bool
+					return zeroVal, errors.New("directive isAuthorized is not implemented")
+				}
+				return ec.Directives.IsAuthorized(ctx, nil, directive0)
+			}
+
+			next = directive1
+			return next
+		},
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_cancelScanJob(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_cancelScanJob_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_cancelAllScanJobs(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_cancelAllScanJobs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Mutation().CancelAllScanJobs(ctx)
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				if ec.Directives.IsAuthorized == nil {
+					var zeroVal int
+					return zeroVal, errors.New("directive isAuthorized is not implemented")
+				}
+				return ec.Directives.IsAuthorized(ctx, nil, directive0)
+			}
+
+			next = directive1
+			return next
+		},
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_cancelAllScanJobs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Mutation", field, true, true, "Int")
+}
+
+func (ec *executionContext) _Mutation_scanAlbum(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_scanAlbum(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ScanAlbum(ctx, fc.Args["albumId"].(int), fc.Args["onlyNewSubAlbums"].(*bool))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				if ec.Directives.IsAuthorized == nil {
+					var zeroVal *models.ScannerResult
+					return zeroVal, errors.New("directive isAuthorized is not implemented")
+				}
+				return ec.Directives.IsAuthorized(ctx, nil, directive0)
+			}
+
+			next = directive1
+			return next
+		},
+		func(ctx context.Context, selections ast.SelectionSet, v *models.ScannerResult) graphql.Marshaler {
+			return ec.marshalNScannerResult2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐScannerResult(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_scanAlbum(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ScannerResult(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_scanAlbum_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -6738,7 +7460,7 @@ func (ec *executionContext) _Mutation_changeUserPreferences(ctx context.Context,
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().ChangeUserPreferences(ctx, fc.Args["language"].(*string))
+			return ec.Resolvers.Mutation().ChangeUserPreferences(ctx, fc.Args["language"].(*string), fc.Args["searchResultLimit"].(*int), fc.Args["showAlbumTree"].(*bool))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -7070,6 +7792,63 @@ func (ec *executionContext) fieldContext_Query_album(ctx context.Context, field 
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_albumTreeChildren(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_albumTreeChildren(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AlbumTreeChildren(ctx, fc.Args["albumIds"].([]int))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				if ec.Directives.IsAuthorized == nil {
+					var zeroVal []*models.AlbumTreeChildren
+					return zeroVal, errors.New("directive isAuthorized is not implemented")
+				}
+				return ec.Directives.IsAuthorized(ctx, nil, directive0)
+			}
+
+			next = directive1
+			return next
+		},
+		func(ctx context.Context, selections ast.SelectionSet, v []*models.AlbumTreeChildren) graphql.Marshaler {
+			return ec.marshalNAlbumTreeChildren2ᚕᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐAlbumTreeChildrenᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_albumTreeChildren(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AlbumTreeChildren(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_albumTreeChildren_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_myFaceGroups(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -7080,7 +7859,7 @@ func (ec *executionContext) _Query_myFaceGroups(ctx context.Context, field graph
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().MyFaceGroups(ctx, fc.Args["paginate"].(*models.Pagination))
+			return ec.Resolvers.Query().MyFaceGroups(ctx, fc.Args["paginate"].(*models.Pagination), fc.Args["countDirection"].(*models.OrderDirection))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -7443,6 +8222,51 @@ func (ec *executionContext) _Query_mapboxToken(ctx context.Context, field graphq
 }
 func (ec *executionContext) fieldContext_Query_mapboxToken(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Query", field, true, true, "String")
+}
+
+func (ec *executionContext) _Query_scannerQueueStatus(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_scannerQueueStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().ScannerQueueStatus(ctx)
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				if ec.Directives.IsAuthorized == nil {
+					var zeroVal []*models.ScannerQueueItem
+					return zeroVal, errors.New("directive isAuthorized is not implemented")
+				}
+				return ec.Directives.IsAuthorized(ctx, nil, directive0)
+			}
+
+			next = directive1
+			return next
+		},
+		func(ctx context.Context, selections ast.SelectionSet, v []*models.ScannerQueueItem) graphql.Marshaler {
+			return ec.marshalNScannerQueueItem2ᚕᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐScannerQueueItemᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_scannerQueueStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ScannerQueueItem(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Query_search(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -7887,6 +8711,231 @@ func (ec *executionContext) fieldContext_Query___schema(_ context.Context, field
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _ReclassifyResult_checked(ctx context.Context, field graphql.CollectedField, obj *models.ReclassifyResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReclassifyResult_checked(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Checked, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReclassifyResult_checked(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReclassifyResult", field, false, false, "Int")
+}
+
+func (ec *executionContext) _ReclassifyResult_kept(ctx context.Context, field graphql.CollectedField, obj *models.ReclassifyResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReclassifyResult_kept(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kept, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReclassifyResult_kept(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReclassifyResult", field, false, false, "Int")
+}
+
+func (ec *executionContext) _ReclassifyResult_moved(ctx context.Context, field graphql.CollectedField, obj *models.ReclassifyResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReclassifyResult_moved(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Moved, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReclassifyResult_moved(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReclassifyResult", field, false, false, "Int")
+}
+
+func (ec *executionContext) _ReclassifyResult_unmatched(ctx context.Context, field graphql.CollectedField, obj *models.ReclassifyResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReclassifyResult_unmatched(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Unmatched, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReclassifyResult_unmatched(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReclassifyResult", field, false, false, "Int")
+}
+
+func (ec *executionContext) _ReclassifyResult_conflicts(ctx context.Context, field graphql.CollectedField, obj *models.ReclassifyResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReclassifyResult_conflicts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Conflicts, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReclassifyResult_conflicts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReclassifyResult", field, false, false, "Int")
+}
+
+func (ec *executionContext) _ReclassifyResult_verifiedSamples(ctx context.Context, field graphql.CollectedField, obj *models.ReclassifyResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReclassifyResult_verifiedSamples(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.VerifiedSamples, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReclassifyResult_verifiedSamples(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReclassifyResult", field, false, false, "Int")
+}
+
+func (ec *executionContext) _ReclassifyResult_changes(ctx context.Context, field graphql.CollectedField, obj *models.ReclassifyResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReclassifyResult_changes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Changes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*models.FaceReassignment) graphql.Marshaler {
+			return ec.marshalNFaceReassignment2ᚕᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceReassignmentᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReclassifyResult_changes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ReclassifyResult",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_FaceReassignment(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ScannerQueueItem_album(ctx context.Context, field graphql.CollectedField, obj *models.ScannerQueueItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ScannerQueueItem_album(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Album, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *models.Album) graphql.Marshaler {
+			return ec.marshalNAlbum2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐAlbum(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ScannerQueueItem_album(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ScannerQueueItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Album(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ScannerQueueItem_status(ctx context.Context, field graphql.CollectedField, obj *models.ScannerQueueItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ScannerQueueItem_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v models.ScannerJobStatus) graphql.Marshaler {
+			return ec.marshalNScannerJobStatus2githubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐScannerJobStatus(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ScannerQueueItem_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ScannerQueueItem", field, false, false, "ScannerJobStatus")
 }
 
 func (ec *executionContext) _ScannerResult_finished(ctx context.Context, field graphql.CollectedField, obj *models.ScannerResult) (ret graphql.Marshaler) {
@@ -8742,6 +9791,52 @@ func (ec *executionContext) _UserPreferences_language(ctx context.Context, field
 }
 func (ec *executionContext) fieldContext_UserPreferences_language(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("UserPreferences", field, false, false, "LanguageTranslation")
+}
+
+func (ec *executionContext) _UserPreferences_searchResultLimit(ctx context.Context, field graphql.CollectedField, obj *models.UserPreferences) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_UserPreferences_searchResultLimit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SearchResultLimit, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_UserPreferences_searchResultLimit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("UserPreferences", field, false, false, "Int")
+}
+
+func (ec *executionContext) _UserPreferences_showAlbumTree(ctx context.Context, field graphql.CollectedField, obj *models.UserPreferences) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_UserPreferences_showAlbumTree(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ShowAlbumTree, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *bool) graphql.Marshaler {
+			return ec.marshalOBoolean2ᚖbool(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_UserPreferences_showAlbumTree(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("UserPreferences", field, false, false, "Boolean")
 }
 
 func (ec *executionContext) _VideoMetadata_id(ctx context.Context, field graphql.CollectedField, obj *models.VideoMetadata) (ret graphql.Marshaler) {
@@ -10344,6 +11439,44 @@ func (ec *executionContext) _Album(ctx context.Context, sel ast.SelectionSet, ob
 	return out
 }
 
+var albumTreeChildrenImplementors = []string{"AlbumTreeChildren"}
+
+func (ec *executionContext) _AlbumTreeChildren(ctx context.Context, sel ast.SelectionSet, obj *models.AlbumTreeChildren) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, albumTreeChildrenImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AlbumTreeChildren")
+		case "albumId":
+			out.Values[i] = ec._AlbumTreeChildren_albumId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "children":
+			out.Values[i] = ec._AlbumTreeChildren_children(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var authorizeResultImplementors = []string{"AuthorizeResult"}
 
 func (ec *executionContext) _AuthorizeResult(ctx context.Context, sel ast.SelectionSet, obj *models.AuthorizeResult) graphql.Marshaler {
@@ -10511,6 +11644,49 @@ func (ec *executionContext) _FaceGroupMerge(ctx context.Context, sel ast.Selecti
 		case "imageFaces":
 			out.Values[i] = ec._FaceGroupMerge_imageFaces(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var faceReassignmentImplementors = []string{"FaceReassignment"}
+
+func (ec *executionContext) _FaceReassignment(ctx context.Context, sel ast.SelectionSet, obj *models.FaceReassignment) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, faceReassignmentImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FaceReassignment")
+		case "imageFace":
+			out.Values[i] = ec._FaceReassignment_imageFace(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "from":
+			out.Values[i] = ec._FaceReassignment_from(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "to":
+			out.Values[i] = ec._FaceReassignment_to(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		default:
@@ -11034,6 +12210,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "reclassifyFaceGroups":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_reclassifyFaceGroups(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "favoriteMedia":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_favoriteMedia(ctx, field)
@@ -11051,6 +12234,27 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "scanUser":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_scanUser(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cancelScanJob":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_cancelScanJob(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cancelAllScanJobs":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_cancelAllScanJobs(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "scanAlbum":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_scanAlbum(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -11283,6 +12487,12 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Query_album(ctx, field)
 				})
+		case "albumTreeChildren":
+			out.ResolveRootConcurrently(innerCtx, ec.OperationContext, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Query_albumTreeChildren(ctx, field)
+				})
 		case "myFaceGroups":
 			out.ResolveRootConcurrently(innerCtx, ec.OperationContext, i,
 				true, true,
@@ -11330,6 +12540,12 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				true, false,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Query_mapboxToken(ctx, field)
+				})
+		case "scannerQueueStatus":
+			out.ResolveRootConcurrently(innerCtx, ec.OperationContext, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Query_scannerQueueStatus(ctx, field)
 				})
 		case "search":
 			out.ResolveRootConcurrently(innerCtx, ec.OperationContext, i,
@@ -11392,6 +12608,107 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			})
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var reclassifyResultImplementors = []string{"ReclassifyResult"}
+
+func (ec *executionContext) _ReclassifyResult(ctx context.Context, sel ast.SelectionSet, obj *models.ReclassifyResult) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, reclassifyResultImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ReclassifyResult")
+		case "checked":
+			out.Values[i] = ec._ReclassifyResult_checked(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kept":
+			out.Values[i] = ec._ReclassifyResult_kept(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "moved":
+			out.Values[i] = ec._ReclassifyResult_moved(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "unmatched":
+			out.Values[i] = ec._ReclassifyResult_unmatched(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "conflicts":
+			out.Values[i] = ec._ReclassifyResult_conflicts(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "verifiedSamples":
+			out.Values[i] = ec._ReclassifyResult_verifiedSamples(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "changes":
+			out.Values[i] = ec._ReclassifyResult_changes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var scannerQueueItemImplementors = []string{"ScannerQueueItem"}
+
+func (ec *executionContext) _ScannerQueueItem(ctx context.Context, sel ast.SelectionSet, obj *models.ScannerQueueItem) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, scannerQueueItemImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ScannerQueueItem")
+		case "album":
+			out.Values[i] = ec._ScannerQueueItem_album(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._ScannerQueueItem_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -11761,6 +13078,16 @@ func (ec *executionContext) _UserPreferences(ctx context.Context, sel ast.Select
 			}
 		case "language":
 			out.Values[i] = ec._UserPreferences_language(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "searchResultLimit":
+			out.Values[i] = ec._UserPreferences_searchResultLimit(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "showAlbumTree":
+			out.Values[i] = ec._UserPreferences_showAlbumTree(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
@@ -12245,6 +13572,30 @@ func (ec *executionContext) marshalNAlbum2ᚖgithubᚗcomᚋphotoviewᚋphotovie
 	return ec._Album(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNAlbumTreeChildren2ᚕᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐAlbumTreeChildrenᚄ(ctx context.Context, sel ast.SelectionSet, v []*models.AlbumTreeChildren) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAlbumTreeChildren2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐAlbumTreeChildren(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAlbumTreeChildren2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐAlbumTreeChildren(ctx context.Context, sel ast.SelectionSet, v *models.AlbumTreeChildren) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "AlbumTreeChildren!")
+		return graphql.Null
+	}
+	return ec._AlbumTreeChildren(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNAny2interface(ctx context.Context, v any) (any, error) {
 	res, err := graphql.UnmarshalAny(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -12341,6 +13692,30 @@ func (ec *executionContext) marshalNFaceGroupMerge2ᚖgithubᚗcomᚋphotoview�
 		return graphql.Null
 	}
 	return ec._FaceGroupMerge(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNFaceReassignment2ᚕᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceReassignmentᚄ(ctx context.Context, sel ast.SelectionSet, v []*models.FaceReassignment) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNFaceReassignment2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceReassignment(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNFaceReassignment2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceReassignment(ctx context.Context, sel ast.SelectionSet, v *models.FaceReassignment) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "FaceReassignment!")
+		return graphql.Null
+	}
+	return ec._FaceReassignment(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNFaceRectangle2githubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceRectangle(ctx context.Context, sel ast.SelectionSet, v models.FaceRectangle) graphql.Marshaler {
@@ -12543,6 +13918,48 @@ func (ec *executionContext) unmarshalNNotificationType2githubᚗcomᚋphotoview�
 
 func (ec *executionContext) marshalNNotificationType2githubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐNotificationType(ctx context.Context, sel ast.SelectionSet, v models.NotificationType) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNReclassifyResult2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐReclassifyResult(ctx context.Context, sel ast.SelectionSet, v *models.ReclassifyResult) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "ReclassifyResult!")
+		return graphql.Null
+	}
+	return ec._ReclassifyResult(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNScannerJobStatus2githubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐScannerJobStatus(ctx context.Context, v any) (models.ScannerJobStatus, error) {
+	var res models.ScannerJobStatus
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNScannerJobStatus2githubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐScannerJobStatus(ctx context.Context, sel ast.SelectionSet, v models.ScannerJobStatus) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNScannerQueueItem2ᚕᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐScannerQueueItemᚄ(ctx context.Context, sel ast.SelectionSet, v []*models.ScannerQueueItem) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNScannerQueueItem2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐScannerQueueItem(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNScannerQueueItem2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐScannerQueueItem(ctx context.Context, sel ast.SelectionSet, v *models.ScannerQueueItem) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "ScannerQueueItem!")
+		return graphql.Null
+	}
+	return ec._ScannerQueueItem(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNScannerResult2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐScannerResult(ctx context.Context, sel ast.SelectionSet, v *models.ScannerResult) graphql.Marshaler {
@@ -12853,6 +14270,13 @@ func (ec *executionContext) marshalOCoordinates2ᚖgithubᚗcomᚋphotoviewᚋph
 		return graphql.Null
 	}
 	return ec._Coordinates(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOFaceGroup2ᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐFaceGroup(ctx context.Context, sel ast.SelectionSet, v *models.FaceGroup) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._FaceGroup(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOFloat2ᚖfloat64(ctx context.Context, v any) (*float64, error) {
