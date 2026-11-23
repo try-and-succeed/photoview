@@ -79,6 +79,16 @@ type ReclassifyResult {
   changes: [FaceReassignment!]!
 }
 
+"Unlabeled face groups without a confirmed face whose faces look like one person"
+type FaceGroupMerge {
+  "The group the others are merged into: the one with the most faces, then the lowest id"
+  destination: FaceGroup!
+  "The groups merged into destination. After a real run they no longer exist"
+  sourceFaceGroupIDs: [ID!]!
+  "Every face of the merged groups, for a preview"
+  imageFaces: [ImageFace!]!
+}
+
 extend type Query {
   """
   Get a list of `FaceGroup`s for the logged in user, named before unnamed, then by the
@@ -118,6 +128,15 @@ extend type Mutation {
 
   "Move a list of ImageFaces to a new face group"
   detachImageFaces(imageFaceIDs: [ID!]!): FaceGroup! @isAuthorized
+
+  """
+  Compare the faces of the unlabeled face groups that have no confirmed face only with each other,
+  and merge the groups whose faces look like one person, the same way faces are classified during
+  a scan. A merge never puts two faces of one photo into one group. The merged faces are flagged
+  for review and stay unconfirmed. With dryRun nothing is written and the result lists the
+  suggested merges. `tolerance` is compared with the squared distance between faces (default 0.2).
+  """
+  mergeSimilarUnlabeledFaceGroups(dryRun: Boolean!, tolerance: Float): [FaceGroupMerge!]! @isAuthorized
 
   "Mark all faces on these photos as confirmed (or not); clears needsReview when confirming"
   setMediaFacesVerified(mediaIDs: [ID!]!, verified: Boolean!): [ImageFace!]! @isAuthorized

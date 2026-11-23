@@ -10,12 +10,6 @@ import (
 	"time"
 )
 
-// One album id's worth of direct children, as returned by albumTreeChildren.
-type AlbumTreeChildren struct {
-	AlbumID  int      `json:"albumId"`
-	Children []*Album `json:"children"`
-}
-
 type AuthorizeResult struct {
 	Success bool `json:"success"`
 	// A textual status message describing the result, can be used to show an error message when `success` is false
@@ -31,12 +25,14 @@ type Coordinates struct {
 	Longitude float64 `json:"longitude"`
 }
 
-// One face an automatic run moved, or would move
-type FaceReassignment struct {
-	ImageFace *ImageFace `json:"imageFace"`
-	From      *FaceGroup `json:"from"`
-	// The group it moved to. A face without a match gets a new group of its own, which only exists after a real run, so this is null for those with dryRun
-	To *FaceGroup `json:"to,omitempty"`
+// Unlabeled face groups without a confirmed face whose faces look like one person
+type FaceGroupMerge struct {
+	// The group the others are merged into: the one with the most faces, then the lowest id
+	Destination *FaceGroup `json:"destination"`
+	// The groups merged into destination. After a real run they no longer exist
+	SourceFaceGroupIDs []int `json:"sourceFaceGroupIDs"`
+	// Every face of the merged groups, for a preview
+	ImageFaces []*ImageFace `json:"imageFaces"`
 }
 
 // Which faces of a group to list
@@ -88,30 +84,6 @@ type Pagination struct {
 }
 
 type Query struct {
-}
-
-// What reclassifyFaceGroups did, or would do with dryRun
-type ReclassifyResult struct {
-	// Unverified faces looked at
-	Checked int `json:"checked"`
-	// Stayed in their group
-	Kept int `json:"kept"`
-	// Moved to another group
-	Moved int `json:"moved"`
-	// No verified face close enough; each got a new group of its own
-	Unmatched int `json:"unmatched"`
-	// Would have moved, but the destination already has a face on that photo
-	Conflicts int `json:"conflicts"`
-	// Verified faces used as reference
-	VerifiedSamples int `json:"verifiedSamples"`
-	// Faces that changed group, or would change with dryRun
-	Changes []*FaceReassignment `json:"changes"`
-}
-
-// A single album/sub-album currently running or queued in the scanner.
-type ScannerQueueItem struct {
-	Album  *Album           `json:"album"`
-	Status ScannerJobStatus `json:"status"`
 }
 
 type ScannerResult struct {
@@ -354,61 +326,6 @@ func (e *OrderDirection) UnmarshalJSON(b []byte) error {
 }
 
 func (e OrderDirection) MarshalJSON() ([]byte, error) {
-	var buf bytes.Buffer
-	e.MarshalGQL(&buf)
-	return buf.Bytes(), nil
-}
-
-type ScannerJobStatus string
-
-const (
-	ScannerJobStatusRunning ScannerJobStatus = "RUNNING"
-	ScannerJobStatusQueued  ScannerJobStatus = "QUEUED"
-)
-
-var AllScannerJobStatus = []ScannerJobStatus{
-	ScannerJobStatusRunning,
-	ScannerJobStatusQueued,
-}
-
-func (e ScannerJobStatus) IsValid() bool {
-	switch e {
-	case ScannerJobStatusRunning, ScannerJobStatusQueued:
-		return true
-	}
-	return false
-}
-
-func (e ScannerJobStatus) String() string {
-	return string(e)
-}
-
-func (e *ScannerJobStatus) UnmarshalGQL(v any) error {
-	str, ok := v.(string)
-	if !ok {
-		return fmt.Errorf("enums must be strings")
-	}
-
-	*e = ScannerJobStatus(str)
-	if !e.IsValid() {
-		return fmt.Errorf("%s is not a valid ScannerJobStatus", str)
-	}
-	return nil
-}
-
-func (e ScannerJobStatus) MarshalGQL(w io.Writer) {
-	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
-}
-
-func (e *ScannerJobStatus) UnmarshalJSON(b []byte) error {
-	s, err := strconv.Unquote(string(b))
-	if err != nil {
-		return err
-	}
-	return e.UnmarshalGQL(s)
-}
-
-func (e ScannerJobStatus) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

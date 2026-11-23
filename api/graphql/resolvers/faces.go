@@ -440,6 +440,21 @@ func (r *mutationResolver) DetachImageFaces(ctx context.Context, imageFaceIDs []
 	return &newFaceGroup, nil
 }
 
+// MergeSimilarUnlabeledFaceGroups is the resolver for the mergeSimilarUnlabeledFaceGroups field.
+func (r *mutationResolver) MergeSimilarUnlabeledFaceGroups(ctx context.Context, dryRun bool, tolerance *float64) ([]*models.FaceGroupMerge, error) {
+	db := r.DB(ctx)
+	user := auth.UserFromContext(ctx)
+	if user == nil {
+		return nil, errors.New("unauthorized")
+	}
+
+	if face_detection.GlobalFaceDetector == nil {
+		return nil, ErrFaceDetectorNotInitialized
+	}
+
+	return mergeSimilarUnlabeledFaceGroups(db, user, dryRun, tolerance)
+}
+
 // SetMediaFacesVerified is the resolver for the setMediaFacesVerified field.
 func (r *mutationResolver) SetMediaFacesVerified(ctx context.Context, mediaIDs []int, verified bool) ([]*models.ImageFace, error) {
 	db := r.DB(ctx)
