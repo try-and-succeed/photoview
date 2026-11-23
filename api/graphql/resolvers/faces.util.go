@@ -206,6 +206,25 @@ func countFaceGroupFaces(ctx context.Context, db *gorm.DB, obj *models.FaceGroup
 // or takes the confirmation back, and returns the faces it changed. IDs the
 // user does not own are skipped.
 func setUserOwnedImageFacesVerified(db *gorm.DB, user *models.User, imageFaceIDs []int, verified bool) ([]*models.ImageFace, error) {
+	updates := map[string]any{"verified": verified}
+	if verified {
+		// A confirmed face has been looked at.
+		updates["needs_review"] = false
+	}
+	return updateUserOwnedImageFaces(db, user, imageFaceIDs, updates)
+}
+
+// setUserOwnedImageFacesNeedsReview flags the given faces the user may change
+// for review, or clears the flag, and returns the faces it changed. IDs the
+// user does not own are skipped. Nothing but the flag changes: flagging a
+// confirmed face leaves it confirmed.
+func setUserOwnedImageFacesNeedsReview(db *gorm.DB, user *models.User, imageFaceIDs []int, needsReview bool) ([]*models.ImageFace, error) {
+	return updateUserOwnedImageFaces(db, user, imageFaceIDs, map[string]any{"needs_review": needsReview})
+}
+
+// updateUserOwnedImageFaces writes updates to the given faces the user may
+// change, skipping the others, and returns those faces ordered by id.
+func updateUserOwnedImageFaces(db *gorm.DB, user *models.User, imageFaceIDs []int, updates map[string]any) ([]*models.ImageFace, error) {
 	if len(imageFaceIDs) == 0 {
 		return []*models.ImageFace{}, nil
 	}
@@ -225,11 +244,6 @@ func setUserOwnedImageFacesVerified(db *gorm.DB, user *models.User, imageFaceIDs
 			ownedIDs[i] = face.ID
 		}
 
-		updates := map[string]any{"verified": verified}
-		if verified {
-			// A confirmed face has been looked at.
-			updates["needs_review"] = false
-		}
 		if err := tx.Model(&models.ImageFace{}).Where("id IN (?)", ownedIDs).Updates(updates).Error; err != nil {
 			return err
 		}

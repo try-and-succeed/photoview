@@ -481,6 +481,21 @@ func (r *mutationResolver) SetImageFacesVerified(ctx context.Context, imageFaceI
 	return setUserOwnedImageFacesVerified(db, user, imageFaceIDs, verified)
 }
 
+// SetImageFacesNeedsReview is the resolver for the setImageFacesNeedsReview field.
+func (r *mutationResolver) SetImageFacesNeedsReview(ctx context.Context, imageFaceIDs []int, needsReview bool) ([]*models.ImageFace, error) {
+	db := r.DB(ctx)
+	user := auth.UserFromContext(ctx)
+	if user == nil {
+		return nil, errors.New("unauthorized")
+	}
+
+	if face_detection.GlobalFaceDetector == nil {
+		return nil, ErrFaceDetectorNotInitialized
+	}
+
+	return setUserOwnedImageFacesNeedsReview(db, user, imageFaceIDs, needsReview)
+}
+
 // MyFaceGroups is the resolver for the myFaceGroups field.
 func (r *queryResolver) MyFaceGroups(ctx context.Context, paginate *models.Pagination) ([]*models.FaceGroup, error) {
 	db := r.DB(ctx)

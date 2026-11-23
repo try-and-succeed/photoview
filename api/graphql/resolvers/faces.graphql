@@ -104,4 +104,7 @@ extend type Mutation {
 
   "Mark single faces as confirmed (or not); clears needsReview when confirming"
   setImageFacesVerified(imageFaceIDs: [ID!]!, verified: Boolean!): [ImageFace!]! @isAuthorized
+
+  "Flag single faces for review, or clear the flag. Leaves `verified`, `assignedBy` and the face's group unchanged."
+  setImageFacesNeedsReview(imageFaceIDs: [ID!]!, needsReview: Boolean!): [ImageFace!]! @isAuthorized
 }

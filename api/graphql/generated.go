@@ -172,6 +172,7 @@ type ComplexityRoot struct {
 		SetAlbumCover                   func(childComplexity int, coverID int) int
 		SetExpireShareToken             func(childComplexity int, token string, expire *time.Time) int
 		SetFaceGroupLabel               func(childComplexity int, faceGroupID int, label *string) int
+		SetImageFacesNeedsReview        func(childComplexity int, imageFaceIDs []int, needsReview bool) int
 		SetImageFacesVerified           func(childComplexity int, imageFaceIDs []int, verified bool) int
 		SetMediaFacesVerified           func(childComplexity int, mediaIDs []int, verified bool) int
 		SetPeriodicScanInterval         func(childComplexity int, interval int) int
@@ -335,6 +336,7 @@ type MutationResolver interface {
 	MergeSimilarUnlabeledFaceGroups(ctx context.Context, dryRun bool, tolerance *float64) ([]*models.FaceGroupMerge, error)
 	SetMediaFacesVerified(ctx context.Context, mediaIDs []int, verified bool) ([]*models.ImageFace, error)
 	SetImageFacesVerified(ctx context.Context, imageFaceIDs []int, verified bool) ([]*models.ImageFace, error)
+	SetImageFacesNeedsReview(ctx context.Context, imageFaceIDs []int, needsReview bool) ([]*models.ImageFace, error)
 	FavoriteMedia(ctx context.Context, mediaID int, favorite bool) (*models.Media, error)
 	ScanAll(ctx context.Context) (*models.ScannerResult, error)
 	ScanUser(ctx context.Context, userID int) (*models.ScannerResult, error)
@@ -1060,6 +1062,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetFaceGroupLabel(childComplexity, args["faceGroupID"].(int), args["label"].(*string)), true
+	case "Mutation.setImageFacesNeedsReview":
+		if e.ComplexityRoot.Mutation.SetImageFacesNeedsReview == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setImageFacesNeedsReview_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetImageFacesNeedsReview(childComplexity, args["imageFaceIDs"].([]int), args["needsReview"].(bool)), true
 	case "Mutation.setImageFacesVerified":
 		if e.ComplexityRoot.Mutation.SetImageFacesVerified == nil {
 			break
@@ -2659,6 +2672,28 @@ func (ec *executionContext) field_Mutation_setFaceGroupLabel_args(ctx context.Co
 		return nil, err
 	}
 	args["label"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_setImageFacesNeedsReview_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "imageFaceIDs",
+		func(ctx context.Context, v any) ([]int, error) {
+			return ec.unmarshalNID2ᚕintᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["imageFaceIDs"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "needsReview",
+		func(ctx context.Context, v any) (bool, error) {
+			return ec.unmarshalNBoolean2bool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["needsReview"] = arg1
 	return args, nil
 }
 
@@ -5734,6 +5769,63 @@ func (ec *executionContext) fieldContext_Mutation_setImageFacesVerified(ctx cont
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_setImageFacesVerified_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_setImageFacesNeedsReview(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_setImageFacesNeedsReview(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetImageFacesNeedsReview(ctx, fc.Args["imageFaceIDs"].([]int), fc.Args["needsReview"].(bool))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				if ec.Directives.IsAuthorized == nil {
+					var zeroVal []*models.ImageFace
+					return zeroVal, errors.New("directive isAuthorized is not implemented")
+				}
+				return ec.Directives.IsAuthorized(ctx, nil, directive0)
+			}
+
+			next = directive1
+			return next
+		},
+		func(ctx context.Context, selections ast.SelectionSet, v []*models.ImageFace) graphql.Marshaler {
+			return ec.marshalNImageFace2ᚕᚖgithubᚗcomᚋphotoviewᚋphotoviewᚋapiᚋgraphqlᚋmodelsᚐImageFaceᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_setImageFacesNeedsReview(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ImageFace(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setImageFacesNeedsReview_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -11030,6 +11122,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "setImageFacesVerified":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_setImageFacesVerified(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "setImageFacesNeedsReview":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setImageFacesNeedsReview(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
